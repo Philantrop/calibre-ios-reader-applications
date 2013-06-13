@@ -970,8 +970,13 @@ class iOSReaderApp(DriverBase):
             if not self.prefs.get(pm, None):
                 self.prefs.set(pm, pref_map[pm])
         self._log_location("prefs created under v%s" % self.prefs.get('plugin_version'))
-        for pref in sorted(self.prefs.keys()):
-            self._log("%s: %s" % (pref, repr(self.prefs.get(pref))))
+        try:
+            for pref in sorted(self.prefs.keys()):
+                if pref == 'plugin_version':
+                    continue
+                self._log("%s: %s" % (pref, repr(self.prefs.get(pref))))
+        except:
+            self._log(self.prefs)
 
     def _initialize_overlay(self):
         '''
