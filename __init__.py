@@ -50,6 +50,19 @@ else:
 
 plugin_prefs = JSONConfig('plugins/iOS reader applications')
 
+# List of app names as installed by iOS
+READER_APP_ALIASES = {
+                      'iBooks': [b'iBooks'],
+                      'Marvin': [b'Marvin', b'Marvin for iPhone']
+                     }
+
+# Supported formats. Not required for iBooks, as the ITUNES class handles formats,
+# included for clarity.
+READER_APP_FORMATS = {
+                      'iBooks': ['epub', 'pdf'],
+                      'Marvin': ['epub']
+                     }
+
 READER_APP_ICONS = [
     'images/BluefireReader.png',
     'images/GoodReader.png',
@@ -316,8 +329,8 @@ class CompileUI():
 
 class DriverBase(DeviceConfig, DevicePlugin):
 
-    # Supported formats
-    FORMATS = ['epub']
+    # Specified at runtime in settings()
+    FORMATS = []
 
     def config_widget(self):
         '''
@@ -325,9 +338,9 @@ class DriverBase(DeviceConfig, DevicePlugin):
         '''
         self._log_location()
         from calibre_plugins.ios_reader_apps.config import ConfigWidget
-        applist = ['iBooks', 'Marvin']
-        if islinux:
-            applist = ['Marvin']
+        applist = ['Marvin']
+        if not islinux:
+            applist += ['iBooks']
         self.cw = ConfigWidget(self, applist)
         return self.cw
 
@@ -389,7 +402,6 @@ class iOSReaderApp(DriverBase):
         free_space()
     '''
 
-    app_aliases = {'iBooks': [b'iBooks'], 'Marvin': [b'Marvin', b'Marvin for iPhone']}
     app_id = None
     author = 'GRiker'
     books_subpath = None
@@ -783,6 +795,16 @@ class iOSReaderApp(DriverBase):
         self._log_location()
         self.report_progress = report_progress
 
+    def settings(self):
+        '''
+        Dynamically assert supported formats
+        '''
+        self._log_location()
+        opts = super(iOSReaderApp, self).settings()
+        opts.format_map = READER_APP_FORMATS[self.ios_reader_app]
+        self._log("format_map for '%s': %s" % (self.ios_reader_app, opts.format_map))
+        return opts
+
     def startup(self):
         self._log_location()
 
@@ -919,7 +941,7 @@ class iOSReaderApp(DriverBase):
         if len(device_list):
             if len(device_list) == 1:
                 self.ios.connect_idevice()
-                self.ios.get_installed_apps(self.app_aliases[self.ios_reader_app])
+                self.ios.get_installed_apps(READER_APP_ALIASES[self.ios_reader_app])
                 preferences = self.ios.get_preferences()
                 self.ios.disconnect_idevice()
 
