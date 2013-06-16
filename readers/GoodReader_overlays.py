@@ -912,21 +912,6 @@ if True:
         return
 
 
-        # Init the upload_books command file
-        # <command>, <timestamp>, <overwrite existing>
-        command_element = "uploadbooks"
-        upload_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
-            command_element, time.mktime(time.localtime())))
-        root = upload_soup.find(command_element)
-        root['overwrite'] = 'yes' if self.prefs.get('marvin_replace_rb', False) else 'no'
-
-        # Init the update_metadata command file
-        command_element = "updatemetadata"
-        update_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
-            command_element, time.mktime(time.localtime())))
-        root = update_soup.find(command_element)
-        root['cleanupcollections'] = 'yes'
-
         # Process the selected files
         file_count = float(len(files))
         new_booklist = []
