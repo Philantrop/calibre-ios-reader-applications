@@ -4,7 +4,7 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
-import os
+import cStringIO, os
 # import base64, copy, cStringIO, hashlib, os, re, sqlite3, time
 from datetime import datetime
 # from lxml import etree, html
@@ -136,7 +136,6 @@ if True:
 
         '''
         from calibre import strftime
-        from calibre.ebooks.metadata.pdf import get_metadata
 
         # Entry point
         booklist = BookList(self)
@@ -151,13 +150,14 @@ if True:
                 # Make a local copy, get the stats
                 pdf_stats = self._localize_pdf('/'.join(['/Documents', book]))
                 self._log("pdf_stats: %s" % pdf_stats)
+                this_book = self._get_metadata(book, pdf_stats)
+                booklist.add_book(this_book, False)
 
-
-                _date_added = datetime.fromtimestamp(int(installed_books[book]['st_birthtime'])).timetuple()
-                _size = int(installed_books[book]['st_size'])
-                self._log("{0:60} {1} {2}".format(repr(book),
-                                                strftime('%Y-%m-%d %H:%M:%S %z', t=_date_added),
-                                                _size))
+#                 _date_added = datetime.fromtimestamp(int(installed_books[book]['st_birthtime'])).timetuple()
+#                 _size = int(installed_books[book]['st_size'])
+#                 self._log("{0:60} {1} {2}".format(repr(book),
+#                                                 strftime('%Y-%m-%d %H:%M:%S %z', t=_date_added),
+#                                                 _size))
 
 
             if self.report_progress is not None:
@@ -1216,6 +1216,28 @@ if True:
             self._log("collections: %s" % field_items)
         return field_items
 
+
+
+
+    def _get_metadata(self, book, pdf_stats):
+        '''
+        Return a populated Book object with known metadata
+        '''
+        from calibre.ebooks.metadata.pdf import get_metadata
+        self._log_location()
+
+        with open(os.path.join(self.temp_dir, pdf_stats['path']), 'rb') as f:
+            stream = cStringIO.StringIO(f.read())
+            mi = get_metadata(stream, cover=False)
+        this_book = Book(mi.title, ', '.join(mi.authors))
+        #this_book.author_sort = ???
+        this_book.datetime = datetime.fromtimestamp(int(pdf_stats['stats']['st_birthtime'])).timetuple()
+        this_book.path = book
+        this_book.size = int(pdf_stats['stats']['st_size'])
+        this_book.uuid = None
+
+        return this_book
+
     def _localize_pdf(self, remote_path):
         '''
         Copy remote_path from iOS to local storage as needed
@@ -1249,6 +1271,9 @@ if True:
             raise DatabaseNotFoundException
 
         return {'path': local_path, 'stats': pdf_stats}
+
+
+
 
     def _remove_existing_copy(self, path, metadata):
         '''
