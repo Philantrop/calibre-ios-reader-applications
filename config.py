@@ -83,7 +83,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
         # Add the app_list to the dropdown
         self.reader_apps.blockSignals(True)
         self.reader_apps.addItems([''])
-        self.reader_apps.addItems(app_list)
+        self.reader_apps.addItems(sorted(app_list, key=lambda s: s.lower()))
 
         # Get the last-used reader_app
         pref = self.prefs.get('preferred_reader_app', '')

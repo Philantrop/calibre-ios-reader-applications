@@ -50,9 +50,10 @@ else:
 
 plugin_prefs = JSONConfig('plugins/iOS reader applications')
 
-# List of app names as installed by iOS
+# List of app names as installed by iOS. Prefix with 'b' for libiMobileDevice
 READER_APP_ALIASES = {
                       'iBooks': [b'iBooks'],
+                      'GoodReader': [b'GoodReaderIPad'],
                       'Marvin': [b'Marvin', b'Marvin for iPhone']
                      }
 
@@ -60,6 +61,7 @@ READER_APP_ALIASES = {
 # included for clarity.
 READER_APP_FORMATS = {
                       'iBooks': ['epub', 'pdf'],
+                      'GoodReader': ['pdf'],
                       'Marvin': ['epub']
                      }
 
@@ -338,7 +340,7 @@ class DriverBase(DeviceConfig, DevicePlugin):
         '''
         self._log_location()
         from calibre_plugins.ios_reader_apps.config import ConfigWidget
-        applist = ['Marvin']
+        applist = ['GoodReader', 'Marvin']
         if not islinux:
             applist += ['iBooks']
         self.cw = ConfigWidget(self, applist)
