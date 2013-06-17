@@ -389,7 +389,7 @@ class iOSReaderApp(DriverBase):
         free_space()
     '''
 
-    app_aliases = {'iBooks': [b'iBooks'],
+    app_aliases = {'iBooks': [b'com.apple.iBooks'],
                    'Marvin': [b'com.appstafarian.Marvin', b'com.appstafarian.MarvinIP']}
     app_id = None
     author = 'GRiker'
