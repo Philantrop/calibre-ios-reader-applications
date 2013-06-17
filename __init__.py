@@ -52,9 +52,9 @@ plugin_prefs = JSONConfig('plugins/iOS reader applications')
 
 # List of app names as installed by iOS. Prefix with 'b' for libiMobileDevice
 READER_APP_ALIASES = {
-                      'iBooks': [b'iBooks'],
+                      'iBooks':     [b'iBooks'],
                       'GoodReader': [b'GoodReaderIPad'],
-                      'Marvin': [b'Marvin', b'Marvin for iPhone']
+                      'Marvin':     [b'Marvin', b'Marvin for iPhone']
                      }
 
 # Supported formats. Not required for iBooks, as the ITUNES class handles formats,

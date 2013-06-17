@@ -449,7 +449,7 @@ if True:
             if not self.ios_connection['app_installed']:
                 if DEBUG_CAN_HANDLE:
                     self._log("2. Marvin installed, attempting connection")
-                self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_name=self.preferred_app)
+                self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_id=self.preferred_app_id)
                 self.ios_connection['device_name'] = self.ios.device_name
                 if DEBUG_CAN_HANDLE:
                     self._log("2a. self.ios_connection: %s" % _show_current_connection())
