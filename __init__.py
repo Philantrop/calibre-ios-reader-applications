@@ -389,7 +389,8 @@ class iOSReaderApp(DriverBase):
         free_space()
     '''
 
-    app_aliases = {'iBooks': [b'iBooks'], 'Marvin': [b'Marvin', b'Marvin for iPhone']}
+    app_aliases = {'iBooks': [b'iBooks'],
+                   'Marvin': [b'com.appstafarian.Marvin', b'com.appstafarian.MarvinIP']}
     app_id = None
     author = 'GRiker'
     books_subpath = None
@@ -907,7 +908,7 @@ class iOSReaderApp(DriverBase):
         '''
         If we have a connected device, store a device profile
         ios.installed_apps: {<appname>: {'app_version': '1.2.3', 'app_id': 'com.apple.iBooks'}}
-        Return the app_id
+        Return a valid app_id
         If more than one alias available, refer to JSON file for preferred alias
         '''
         self._log_location()
@@ -920,7 +921,6 @@ class iOSReaderApp(DriverBase):
             if len(device_list):
                 if len(device_list) == 1:
                     self.ios.connect_idevice()
-                    self.ios.get_installed_apps(self.app_aliases[self.ios_reader_app])
                     preferences = self.ios.get_preferences()
                     self.ios.disconnect_idevice()
 
@@ -931,33 +931,20 @@ class iOSReaderApp(DriverBase):
                     device_info.pop('Model')
                     self.device_profile = dict(preferences.items() + device_info.items())
 
-                    if not self.ios.installed_apps:
-                        self._log("Preferred iOS reader application '%s' not installed on iDevice" % self.ios_reader_app)
-                    elif len(self.ios.installed_apps) == 1:
-                        preferred_app = self.ios.installed_apps.keys()[0]
-                        app_id = self.ios.installed_apps[preferred_app]['app_id']
-                        self._log("Preferred iOS reader application: '%s' app_name: '%s' app_id: %s" %
-                                   (self.ios_reader_app, preferred_app, app_id))
-                    else:
-                        self._log("Multiple aliases for '%s': %s" % (self.ios_reader_app, self.ios.installed_apps.keys()))
-                        preferred_alias = self.prefs.get('preferred_reader_app_alias', None)
-                        if preferred_alias:
-                            self._log("Using preferred alias '%s'" % preferred_alias)
-                            preferred_app = preferred_alias
-                        else:
-                            preferred_app = self.ios.installed_apps.keys()[0]
-                            self._log("No preferred alias specified, using '%s'" % preferred_app)
-                        app_id = self.ios.installed_apps[preferred_app]['app_id']
-                        self._log("Preferred iOS reader application: '%s' app_name: '%s' app_id: %s" %
-                                   (self.ios_reader_app, preferred_app, app_id))
-                    # Store the actual app name we're using - referenced in overlays:can_handle()
-                    self.preferred_app = preferred_app
+                    # Find the first installed app (iPad version takes precedence)
+                    for _app_id in self.app_aliases[self.ios_reader_app]:
+                        self._log("mounting '%s'" % _app_id)
+                        if self.ios.mount_ios_app(app_id=_app_id):
+                            app_id = _app_id
+                            self.ios.disconnect_idevice()
+                            break
+                    self.preferred_app_id = app_id
                 else:
                     self._log("Too many connected iDevices")
             else:
                 self._log("No connected iDevices")
         except:
-            self.preferred_app = None
+            self.preferred_app_id = None
             import traceback
             traceback.print_exc()
             exc_type, exc_value, exc_traceback = sys.exc_info()
