@@ -4,7 +4,7 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
-import base64, cStringIO, json, os, sqlite3
+import base64, cStringIO, json, os, sqlite3, time
 # import base64, copy, cStringIO, hashlib, os, re, sqlite3, time
 from datetime import datetime
 # from lxml import etree, html
@@ -53,24 +53,22 @@ if True:
             'ejected': False,
             'udid': 0
             }
-        self.path_template = '{0}.pdf'
+        self.path_template = '{0} - {1}.pdf'
         self.local_metadata = None
         self.remote_metadata = '/Library/calibre_metadata.sqlite'
-        #self.temp_dir = PersistentTemporaryDirectory('_GoodReader_local')
 
-
-        # ~~~~~~~~~ Confirm/create thumbs archive ~~~~~~~~~
-        if not os.path.exists(self.cache_dir):
-            os.makedirs(self.cache_dir)
-
-        if not os.path.exists(self.archive_path):
-            self._log("creating zip archive")
-            zfw = ZipFile(self.archive_path, mode='w')
-            zfw.writestr("GoodReader Thumbs Archive", '')
-            zfw.close()
-        else:
-            self._log("existing thumb cache at '%s'" % self.archive_path)
-
+    def add_books_to_metadata(self, locations, metadata, booklists):
+        '''
+        Add locations to the booklists. This function must not communicate with
+        the device.
+        @param locations: Result of a call to L{upload_books}
+        @param metadata: List of MetaInformation objects, same as for
+        :method:`upload_books`.
+        @param booklists: A tuple containing the result of calls to
+                                (L{books}(oncard=None), L{books}(oncard='carda'),
+                                L{books}(oncard='cardb')).
+        '''
+        self._log_location()
 
     def books(self, oncard=None, end_session=True):
         '''
@@ -437,8 +435,57 @@ if True:
         (width, height, cover_data as jpeg).
 
         '''
-        self._log_location()
+        from calibre.ebooks.metadata.pdf import get_metadata
 
+        new_booklist = []
+        con = sqlite3.connect(self.local_metadata)
+        with con:
+            cur = con.cursor()
+
+            for (i, fpath) in enumerate(files):
+                thumb = self._cover_to_thumb(metadata[i])
+                this_book = self._create_new_book(fpath, metadata[i], thumb)
+                new_booklist.append(this_book)
+                fs = self.path_template.format(metadata[i].title,
+                                                        ', '.join(metadata[i].authors))
+                destination = '/'.join(['/Documents', fs])
+                self.ios.copy_to_idevice(str(fpath), destination)
+
+                # Add to calibre_metadata db
+                cur.execute('''
+                                INSERT OR REPLACE INTO metadata
+                                 (authors,
+                                  author_sort,
+                                  dateadded,
+                                  filename,
+                                  size,
+                                  thumb_data,
+                                  title,
+                                  title_sort)
+                                VALUES(?, ?, ?, ?, ?, ?, ?, ?)''',
+                                (', '.join(this_book.authors),
+                                 this_book.author_sort,
+                                 this_book.datetime,
+                                 this_book.path,
+                                 this_book.size,
+                                 this_book.thumb_data,
+                                 this_book.title,
+                                 this_book.title_sort)
+                                )
+                if self.report_progress is not None:
+                    self.report_progress(float((i + 1)*100 / len(files))/100,
+                        '%(num)d of %(tot)d' % dict(num=i + 1, tot=len(files)))
+
+            cur.close()
+            con.commit()
+
+        # Copy the updated db to the iDevice
+        self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
+
+        if self.report_progress is not None:
+            self.report_progress(1.0, 'finished')
+
+        return (new_booklist, [], [])
 
     # ~~~~~~~~~~~~~~~~~~~~ Helpers ~~~~~~~~~~~~~~~~~~~~
     def _cover_to_thumb(self, metadata):
@@ -455,8 +502,23 @@ if True:
 
         thumb = None
 
-        if metadata.cover_data:
+        if hasattr(metadata, 'has_cover'):
+            self._log("using existing cover")
+            try:
+                im = PILImage.open(metadata.cover)
+                im = im.resize((COVER_WIDTH, COVER_HEIGHT), PILImage.ANTIALIAS)
+                of = cStringIO.StringIO()
+                im.convert('RGB').save(of, 'JPEG')
+                thumb = of.getvalue()
+                of.close()
+            except:
+                self._log("ERROR converting thumb for '%s'" % (metadata.title))
+                import traceback
+                traceback.print_exc()
+
+        elif metadata.cover_data is not None:
             #self._log(repr(metadata.cover_data))
+            self._log("generating cover from cover_data")
             try:
                 # Resize for local thumb
                 img_data = cStringIO.StringIO(metadata.cover_data[1])
@@ -475,6 +537,22 @@ if True:
         else:
             self._log("ERROR: no cover available for '%s'" % metadata.title)
         return thumb
+
+    def _create_new_book(self, fpath, metadata, thumb):
+        '''
+        '''
+        from calibre.ebooks.metadata import authors_to_string
+
+        self._log_location(metadata.title)
+        this_book = Book(metadata.title, authors_to_string(metadata.authors))
+        this_book.author_sort = metadata.author_sort
+        this_book.datetime = time.mktime(time.gmtime())
+        this_book.path = os.path.basename(fpath)
+        this_book.size = metadata.size
+        this_book.thumbnail = self._cover_to_thumb(metadata)
+        this_book.thumb_data = base64.b64encode(this_book.thumbnail)
+        this_book.title_sort = metadata.title_sort
+        return this_book
 
 
     def _get_cached_metadata(self, cur, book):
@@ -512,13 +590,14 @@ if True:
         '''
         Return a populated Book object with available metadata
         '''
+        from calibre.ebooks.metadata import authors_to_string
         from calibre.ebooks.metadata.pdf import get_metadata
         self._log_location(book)
 
         with open(os.path.join(self.temp_dir, pdf_stats['path']), 'rb') as f:
             stream = cStringIO.StringIO(f.read())
             mi = get_metadata(stream)
-        this_book = Book(mi.title, ', '.join(mi.authors))
+        this_book = Book(mi.title, authors_to_string(mi.authors))
         this_book.author_sort = ', '.join(mi.authors)
         this_book.datetime = datetime.fromtimestamp(int(pdf_stats['stats']['st_birthtime'])).timetuple()
         this_book.dateadded = int(pdf_stats['stats']['st_birthtime'])
