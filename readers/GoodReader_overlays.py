@@ -4,7 +4,7 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
-import cStringIO, os
+import base64, cStringIO, json, os, sqlite3
 # import base64, copy, cStringIO, hashlib, os, re, sqlite3, time
 from datetime import datetime
 # from lxml import etree, html
@@ -54,7 +54,9 @@ if True:
             'udid': 0
             }
         self.path_template = '{0}.pdf'
-        self.temp_dir = PersistentTemporaryDirectory('_GoodReader_local')
+        self.local_metadata = None
+        self.remote_metadata = '/Library/calibre_metadata.sqlite'
+        #self.temp_dir = PersistentTemporaryDirectory('_GoodReader_local')
 
 
         # ~~~~~~~~~ Confirm/create thumbs archive ~~~~~~~~~
@@ -69,61 +71,6 @@ if True:
         else:
             self._log("existing thumb cache at '%s'" % self.archive_path)
 
-
-    def add_books_to_metadata(self, locations, metadata, booklists):
-        '''
-        Add locations to the booklists. This function must not communicate with
-        the device.
-        @param locations: Result of a call to L{upload_books}
-        @param metadata: List of MetaInformation objects, same as for
-        :method:`upload_books`.
-        @param booklists: A tuple containing the result of calls to
-                                (L{books}(oncard=None), L{books}(oncard='carda'),
-                                L{books}(oncard='cardb')).
-        '''
-
-        self._log_location()
-        return
-
-        if False:
-            self._log("locations: %s" % repr(locations))
-            self._log("metadata:")
-            for mi in metadata:
-                self._log("  %s" % mi.title)
-            self._log("booklists:")
-            for book in booklists[0]:
-                self._log(" '%s' by %s %s" % (book.title, book.authors, book.uuid))
-            self._log("metadata_updates:")
-            for book in self.metadata_updates:
-                self._log(" '%s' by %s %s" % (book['title'], book['authors'], book['uuid']))
-
-            metadata_update_uuids = [book['uuid'] for book in self.metadata_updates]
-            self._log("metadata_update_uuids: %s" % repr(metadata_update_uuids))
-
-        # Delete any obsolete copies of the book from the booklist
-        if self.update_list:
-            for j, p_book in enumerate(self.update_list):
-                # Purge the booklist, self.cached_books
-                for i, bl_book in enumerate(booklists[0]):
-                    if bl_book.uuid == p_book['uuid']:
-                        # Remove from booklists[0]
-                        booklists[0].pop(i)
-
-                        # If >1 matching uuid, remove old title
-                        matching_uuids = 0
-                        for cb in self.cached_books:
-                            if self.cached_books[cb]['uuid'] == p_book['uuid']:
-                                matching_uuids += 1
-                        if matching_uuids > 1:
-                            for cb in self.cached_books:
-                                if self.cached_books[cb]['uuid'] == p_book['uuid']:
-                                    if (self.cached_books[cb]['title'] == p_book['title'] and
-                                        self.cached_books[cb]['author'] == p_book['author']):
-                                        self.cached_books.pop(cb)
-                                        break
-
-        for new_book in locations[0]:
-            booklists[0].append(new_book)
 
     def books(self, oncard=None, end_session=True):
         '''
@@ -143,35 +90,70 @@ if True:
             self._log_location()
             cached_books = {}
 
-            # Fetch installed books from /Documents
-            installed_books = self.ios.listdir(b'/Documents')
-            for book in installed_books:
-                # Get the PDF metadata
-                # Make a local copy, get the stats
-                pdf_stats = self._localize_pdf('/'.join(['/Documents', book]))
-                self._log("pdf_stats: %s" % pdf_stats)
-                this_book = self._get_metadata(book, pdf_stats)
-                booklist.add_book(this_book, False)
+            # Get a local copy of calibre_metadata.db
+            db_profile = self._localize_database_path(self.remote_metadata)
+            self.local_metadata = db_profile['path']
+            con = sqlite3.connect(self.local_metadata)
+            with con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+                cur.execute('''SELECT
+                                filename
+                               FROM metadata
+                            ''')
+                rows = cur.fetchall()
+                cached_books = [row[b'filename'] for row in rows]
+                self._log("cached_books from %s: %s" % (self.remote_metadata,
+                                                        repr(cached_books)))
 
-#                 _date_added = datetime.fromtimestamp(int(installed_books[book]['st_birthtime'])).timetuple()
-#                 _size = int(installed_books[book]['st_size'])
-#                 self._log("{0:60} {1} {2}".format(repr(book),
-#                                                 strftime('%Y-%m-%d %H:%M:%S %z', t=_date_added),
-#                                                 _size))
+                # Fetch installed books from /Documents
+                installed_books = self.ios.listdir(b'/Documents')
+                for i, book in enumerate(installed_books):
+                    if book in cached_books:
+                        # Retrieve the cached metadata
+                        this_book = self._get_cached_metadata(cur, book)
+                        booklist.add_book(this_book, False)
+                    else:
+                        # Make a local copy, get the stats
+                        pdf_stats = self._localize_pdf('/'.join(['/Documents', book]))
+                        this_book = self._get_metadata(book, pdf_stats)
+                        booklist.add_book(this_book, False)
+                        cached_books.append(book)
+                        # Add to calibre_metadata db
+                        cur.execute('''
+                                        INSERT OR REPLACE INTO metadata
+                                         (authors,
+                                          author_sort,
+                                          dateadded,
+                                          filename,
+                                          size,
+                                          thumb_data,
+                                          title,
+                                          title_sort)
+                                        VALUES(?, ?, ?, ?, ?, ?, ?, ?)''',
+                                        (', '.join(this_book.authors),
+                                         this_book.author_sort,
+                                         this_book.dateadded,
+                                         this_book.path,
+                                         this_book.size,
+                                         this_book.thumb_data,
+                                         this_book.title,
+                                         this_book.title_sort)
+                                        )
+                    if self.report_progress is not None:
+                        self.report_progress(float((i + 1)*100 / len(installed_books))/100,
+                            '%(num)d of %(tot)d' % dict(num=i + 1, tot=len(installed_books)))
 
+                cur.close()
+                con.commit()
+
+                # Copy the updated db to the iDevice
+                self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
 
             if self.report_progress is not None:
                 self.report_progress(1.0, 'finished')
 
             self.cached_books = cached_books
-            if self.prefs.get('developer_mode', False):
-                self._log("cached %d books from GoodReader:" % len(cached_books))
-                for book in self.cached_books:
-                    self._log("{0:30} {1:42} {2} {3}".format(
-                        repr(self.cached_books[book]['title'][0:26]),
-                        repr(self.cached_books[book]['uuid']),
-                        repr(self.cached_books[book]['authors']),
-                        repr(book)))
 
         return booklist
 
@@ -208,7 +190,7 @@ if True:
 
         # ~~~ Entry point ~~~
 
-        DEBUG_CAN_HANDLE = True
+        DEBUG_CAN_HANDLE = False
 
         if DEBUG_CAN_HANDLE:
             self._log_location(_show_current_connection())
@@ -333,9 +315,6 @@ if True:
         See comments in can_handle()
         '''
 
-        self._log_location()
-        return
-
         #self._log_location()
         result = self.can_handle(device_info, debug)
         #self._log_location("returning %s from can_handle()" % repr(result))
@@ -346,34 +325,14 @@ if True:
         Delete books at paths on device.
         '''
         self._log_location()
-        return
-
-
-        command_name = 'delete_books'
-        command_element = 'deletebooks'
-        command_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
-            command_element, time.mktime(time.localtime())))
+        self._log("cached_books: %s" % self.cached_books)
 
         file_count = float(len(paths))
 
         for i, path in enumerate(paths):
-            # Add book to command file
-            if path in self.cached_books:
-                book_tag = Tag(command_soup, 'book')
-                book_tag['author'] = ', '.join(self.cached_books[path]['authors'])
-                book_tag['title'] = self.cached_books[path]['title']
-                book_tag['uuid'] = self.cached_books[path]['uuid']
-                book_tag['filename'] = path
-                command_soup.manifest.insert(i, book_tag)
-            else:
-                self._log("trying to delete book not in cache '%s'" % path)
-                continue
-
-        # Copy the command file to the staging folder
-        self._stage_command_file(command_name, command_soup, show_command=self.prefs.get('developer_mode', False))
-
-        # Wait for completion
-        self._wait_for_command_completion(command_name)
+            self._log("removing %s" % repr(path))
+            ios_path = '/'.join(['/Documents', path])
+            self.ios.remove(ios_path)
 
     def eject(self):
         '''
@@ -387,202 +346,6 @@ if True:
             time.sleep(0.10)
         self.ejected = True
 
-    def get_file(self, path, outfile, end_session=True):
-        '''
-        Read the file at path on the device and write it to provided outfile.
-
-        outfile: file object (result of an open() call)
-        '''
-        self._log_location()
-        self.ios.copy_from_idevice('/'.join(['Documents', path]), outfile)
-
-    """
-    def is_usb_connected(self, devices_on_system, debug=False, only_presence=False):
-        '''
-        Return (True, device_info) if a device handled by this plugin is currently connected,
-        else (False, None)
-        '''
-
-
-        if iswindows:
-            return self.is_usb_connected_windows(devices_on_system,
-                    debug=debug, only_presence=only_presence)
-
-
-        # >>> Entry point
-        self._log_location(self.ios_connection)
-        return
-
-        # If we were ejected, test to see if we're still physically connected
-        if self.ejected:
-            for dev in devices_on_system:
-                if isosx:
-                    # dev: (1452L, 4779L, 592L, u'Apple Inc.', u'iPad', u'<udid>')
-                    if self.ios_connection['udid'] == dev[5]:
-                        self._log_location("iDevice physically connected, but ejected")
-                        break
-                elif islinux:
-                    '''
-                    dev: USBDevice(busnum=1, devnum=17, vendor_id=0x05ac, product_id=0x12ab,
-                                   bcd=0x0250, manufacturer=Apple Inc., product=iPad,
-                                   serial=<udid>)
-                    '''
-                    if self.ios_connection['udid'] == dev.serial:
-                        self._log_location("iDevice physically connected, but ejected")
-                        break
-
-            else:
-                self._log_location("iDevice physically disconnected, resetting ios_connection")
-                self._reset_ios_connection()
-                self.ejected = False
-            return False, None
-
-        vendors_on_system = set([x[0] for x in devices_on_system])
-        vendors = self.VENDOR_ID if hasattr(self.VENDOR_ID, '__len__') else [self.VENDOR_ID]
-        if hasattr(self.VENDOR_ID, 'keys'):
-            products = []
-            for ven in self.VENDOR_ID:
-                products.extend(self.VENDOR_ID[ven].keys())
-        else:
-            products = self.PRODUCT_ID if hasattr(self.PRODUCT_ID, '__len__') else [self.PRODUCT_ID]
-
-        for vid in vendors:
-            if vid in vendors_on_system:
-                for dev in devices_on_system:
-                    cvid, pid, bcd = dev[:3]
-                    if cvid == vid:
-                        if pid in products:
-                            if hasattr(self.VENDOR_ID, 'keys'):
-                                try:
-                                    cbcd = self.VENDOR_ID[vid][pid]
-                                except KeyError:
-                                    # Vendor vid does not have product pid, pid
-                                    # exists for some other vendor in this
-                                    # device
-                                    continue
-                            else:
-                                cbcd = self.BCD
-                            if self.test_bcd(bcd, cbcd):
-                                if self.can_handle(dev, debug=debug):
-                                    return True, dev
-
-        return False, None
-
-    def is_usb_connected_windows(self, devices_on_system, debug=False, only_presence=False):
-        '''
-        Called from is_usb_connected()
-        Windows-specific implementation
-        See comments in is_usb_connected()
-        '''
-
-        def id_iterator():
-            if hasattr(self.VENDOR_ID, 'keys'):
-                for vid in self.VENDOR_ID:
-                    vend = self.VENDOR_ID[vid]
-                    for pid in vend:
-                        bcd = vend[pid]
-                        yield vid, pid, bcd
-            else:
-                vendors = self.VENDOR_ID if hasattr(self.VENDOR_ID, '__len__') else [self.VENDOR_ID]
-                products = self.PRODUCT_ID if hasattr(self.PRODUCT_ID, '__len__') else [self.PRODUCT_ID]
-                for vid in vendors:
-                    for pid in products:
-                        yield vid, pid, self.BCD
-
-        # >>> Entry point
-        #self._log_location(self.ios_connection)
-
-        # If we were ejected, test to see if we're still physically connected
-        # dev:  u'usb\\vid_05ac&pid_12ab&rev_0250'
-        if self.ejected:
-            _vid = "%04x" % self.vid
-            _pid = "%04x" % self.pid
-            for dev in devices_on_system:
-                if re.search('.*vid_%s&pid_%s.*' % (_vid, _pid), dev):
-                    self._log_location("iDevice physically connected, but ejected")
-                    break
-            else:
-                self._log_location("iDevice physically disconnected, resetting ios_connection")
-                self._reset_ios_connection()
-                self.ejected = False
-            return False, None
-
-        # When Marvin disconnects, this throws an error, so exit cleanly
-        try:
-            for vendor_id, product_id, bcd in id_iterator():
-                vid, pid = 'vid_%4.4x'%vendor_id, 'pid_%4.4x'%product_id
-                vidd, pidd = 'vid_%i'%vendor_id, 'pid_%i'%product_id
-                for device_id in devices_on_system:
-                    if (vid in device_id or vidd in device_id) and \
-                       (pid in device_id or pidd in device_id) and \
-                       self.test_bcd_windows(device_id, bcd):
-                            if False and self.verbose:
-                                self._log("self.print_usb_device_info():")
-                                self.print_usb_device_info(device_id)
-                            if only_presence or self.can_handle_windows(device_id, debug=debug):
-                                try:
-                                    bcd = int(device_id.rpartition(
-                                                'rev_')[-1].replace(':', 'a'), 16)
-                                except:
-                                    bcd = None
-                                marvin_connected = self.can_handle((vendor_id, product_id, bcd, None, None, None))
-                                if marvin_connected:
-                                    return True, (vendor_id, product_id, bcd, None, None, None)
-        except:
-            pass
-
-        return False, None
-    """
-
-    def post_yank_cleanup(self):
-        '''
-        Called after device disconnects - can_handle() returns False
-        We don't know if the device was ejected cleanly, or disconnected cleanly.
-        User may have simply pulled the USB cable. If so, USBMUXD may complain of a
-        broken pipe upon physical reconnection.
-        '''
-        self._log_location()
-        self.ios_connection['connected'] = False
-        #self.ios.disconnect_idevice()
-
-    def prepare_addable_books(self, paths):
-        '''
-        Given a list of paths, returns another list of paths. These paths
-        point to addable versions of the books.
-
-        If there is an error preparing a book, then instead of a path, the
-        position in the returned list for that book should be a three tuple:
-        (original_path, the exception instance, traceback)
-        Modeled on calibre.devices.mtp.driver:prepare_addable_books() #304
-        '''
-        self._log_location()
-        return
-
-        from calibre.ptempfile import PersistentTemporaryDirectory
-        from calibre.utils.filenames import shorten_components_to
-
-        self._log_location()
-        tdir = PersistentTemporaryDirectory('_prepare_marvin')
-        ans = []
-        for path in paths:
-            if not self.ios.exists('/'.join(['Documents', path])):
-                ans.append((path, 'File not found', 'File not found'))
-                continue
-
-            base = tdir
-            if iswindows:
-                plen = len(base)
-                name = ''.join(shorten_components_to(245-plen, [path]))
-            with open(os.path.join(base, path), 'wb') as out:
-                try:
-                    self.get_file(path, out)
-                except Exception as e:
-                    import traceback
-                    ans.append((path, e, traceback.format_exc()))
-                else:
-                    ans.append(out.name)
-        return ans
-
     def remove_books_from_metadata(self, paths, booklists):
         '''
         Remove books from the metadata list. This function must not communicate
@@ -592,42 +355,13 @@ if True:
                                 (L{books}(oncard=None), L{books}(oncard='carda'),
                                 L{books}(oncard='cardb')).
 
-        NB: This will not find books that were added by a different installation of calibre
-            as uuids are different
         '''
         self._log_location()
-        return
-
         for path in paths:
             for i, bl_book in enumerate(booklists[0]):
-                found = False
-                if bl_book.uuid and bl_book.uuid == self.cached_books[path]['uuid']:
-                    self._log("'%s' matched uuid" % bl_book.title)
+                if bl_book.path == path:
+                    self._log("matched path: %s" % repr(bl_book.path))
                     booklists[0].pop(i)
-                    found = True
-                elif bl_book.title == self.cached_books[path]['title'] and \
-                     bl_book.author == self.cached_books[path]['author']:
-                    self._log("'%s' matched title + author" % bl_book.title)
-                    booklists[0].pop(i)
-                    found = True
-
-                if found:
-                    # Remove from self.cached_books
-                    for cb in self.cached_books:
-                        if (self.cached_books[cb]['uuid'] == self.cached_books[path]['uuid'] and
-                            self.cached_books[cb]['author'] == self.cached_books[path]['author'] and
-                            self.cached_books[cb]['title'] == self.cached_books[path]['title']):
-                            self.cached_books.pop(cb)
-                            break
-                    else:
-                        self._log("'%s' not found in self.cached_books" % self.cached_books[path]['title'])
-
-                    break
-            else:
-                self._log("  unable to find '%s' by '%s' (%s)" %
-                                (self.cached_books[path]['title'],
-                                 self.cached_books[path]['author'],
-                                 self.cached_books[path]['uuid']))
 
     def sync_booklists(self, booklists, end_session=True):
         '''
@@ -642,248 +376,46 @@ if True:
         manage_device_metadata=='on_connect', otherwise booklist metadata comes from
         device
         '''
-        # Automatic metadata management is disabled 2013-06-03 v0.1.11
-        if True:
-            self._log_location("automatic metadata management disabled")
-            return
-
-        from xml.sax.saxutils import escape
-        from calibre import strftime
-
-        manage_device_metadata = prefs['manage_device_metadata']
-        self._log_location(manage_device_metadata)
-        if manage_device_metadata != 'on_connect':
-            self._log("automatic metadata management disabled")
-            return
-
-        command_name = "update_metadata"
-        command_element = "updatemetadata"
-        command_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
-            command_element, time.mktime(time.localtime())))
-
-        root = command_soup.find(command_element)
-        root['cleanupcollections'] = 'yes'
+        self._log_location()
 
         for booklist in booklists:
-            '''
-            Evaluate author, author_sort, collections, cover, description, published,
-            publisher, series, series_number, tags, title, and title_sort for changes.
-            If anything has changed, send refreshed metadata.
-            Always send <collections>, <subjects> with current values
-            Send <cover>, <description> only on changes.
-            '''
-
             if not booklist:
                 continue
 
-            changed = 0
-            for book in booklist:
-                if not book.in_library:
-                    continue
+            current_books = [book.path for book in booklist]
+            self._log("current_books: %s" % current_books)
 
-                filename = self.path_template.format(book.uuid)
+            con = sqlite3.connect(self.local_metadata)
+            with con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+                cur.execute('''SELECT
+                                filename
+                               FROM metadata
+                            ''')
+                rows = cur.fetchall()
+                db_books = [row[b'filename'] for row in rows]
+                self._log("db_books: %s" % db_books)
 
-                if filename not in self.cached_books:
-                    for fn in self.cached_books:
-                        if (book.uuid == self.cached_books[fn]['uuid'] or
-                            (book.title == self.cached_books[fn]['title'] and
-                             book.authors == self.cached_books[fn]['authors'])):
-                            filename = fn
-                            break
-                    else:
-                        self._log("ERROR: '%s' by %s not found in cached_books" %
-                                              (book.title, repr(book.authors)))
-                        continue
+            # Remove books not in current_books from db
+            s = set(current_books)
+            books_to_delete = [x for x in db_books if x not in s]
 
-                # Test for changes to title, author, tags, collections
-                cover_updated = False
-                metadata_updated = False
+            if books_to_delete:
+                con = sqlite3.connect(self.local_metadata)
+                for book in books_to_delete:
+                    # Remove from db, update device copy
+                    self._log("Removing %s from local_metadata" % json.dumps(book))
+                    with con:
+                        con.row_factory = sqlite3.Row
+                        cur = con.cursor()
+                        cur.execute('''DELETE FROM metadata
+                                       WHERE filename = {0}
+                                    '''.format(json.dumps(book)))
+                con.commit()
 
-                # >>> Attributes <<<
-                # ~~~~~~~~~~ author ~~~~~~~~~~
-                if self.cached_books[filename]['author'] != book.author:
-                    self._log("%s (%s)" % (book.title, book.in_library))
-                    self._log(" author: (device) %s != (library) %s" %
-                                         (self.cached_books[filename]['author'], book.author))
-                    self.cached_books[filename]['author'] = book.author
-                    metadata_updated = True
-
-                # ~~~~~~~~~~ author_sort ~~~~~~~~~~
-                if self.cached_books[filename]['author_sort'] != book.author_sort:
-                    self._log("%s (%s)" % (book.title, book.in_library))
-                    self._log(" author_sort: (device) %s != (library) %s" %
-                                         (self.cached_books[filename]['author_sort'], book.author_sort))
-                    self.cached_books[filename]['author_sort'] = book.author_sort
-                    metadata_updated = True
-
-                # ~~~~~~~~~~ pubdate ~~~~~~~~~~
-                if self.cached_books[filename]['pubdate'] != strftime('%Y-%m-%d', t=book.pubdate):
-                    self._log("%s (%s)" % (book.title, book.in_library))
-                    self._log(" pubdate: (device) %s != (library) %s" %
-                                         (repr(self.cached_books[filename]['pubdate']),
-                                          repr(strftime('%Y-%m-%d', t=book.pubdate))))
-                                          #repr(strftime('%Y-%m-%d %H:%M:%S %z', t=book.pubdate))))
-                    self.cached_books[filename]['pubdate'] = book.pubdate
-                    metadata_updated = True
-
-                # ~~~~~~~~~~ publisher ~~~~~~~~~~
-                if self.cached_books[filename]['publisher'] != book.publisher:
-                    self._log("%s (%s)" % (book.title, book.in_library))
-                    self._log(" publisher: (device) %s != (library) %s" %
-                                         (repr(self.cached_books[filename]['publisher']), repr(book.publisher)))
-                    self.cached_books[filename]['publisher'] = book.publisher
-                    metadata_updated = True
-
-                # ~~~~~~~~~~ series ~~~~~~~~~~
-                if self.cached_books[filename]['series'] != book.series:
-                    self._log("%s (%s)" % (book.title, book.in_library))
-                    self._log(" series: (device) %s != (library) %s" %
-                                         (repr(self.cached_books[filename]['series']), repr(book.series)))
-                    self.cached_books[filename]['series'] = book.series
-                    metadata_updated = True
-
-                # ~~~~~~~~~~ series_index ~~~~~~~~~~
-                if self.cached_books[filename]['series_index'] != book.series_index:
-                    self._log("%s (%s)" % (book.title, book.in_library))
-                    self._log(" series_index: (device) %s != (library) %s" %
-                        (repr(self.cached_books[filename]['series_index']), repr(book.series_index)))
-                    self.cached_books[filename]['series_index'] = book.series_index
-                    metadata_updated = True
-
-                # ~~~~~~~~~~ title ~~~~~~~~~~
-                if self.cached_books[filename]['title'] != book.title:
-                    self._log("%s (%s)" % (book.title, book.in_library))
-                    self._log(" title: (device) %s != (library) %s" %
-                        (repr(self.cached_books[filename]['title']), repr(book.title)))
-                    self.cached_books[filename]['title'] = book.title
-                    metadata_updated = True
-
-                # ~~~~~~~~~~ title_sort ~~~~~~~~~~
-                if self.cached_books[filename]['title_sort'] != book.title_sort:
-                    self._log("%s (%s)" % (book.title, book.in_library))
-                    self._log(" title_sort: (device) %s != (library) %s" %
-                        (repr(self.cached_books[filename]['title_sort']), repr(book.title_sort)))
-                    self.cached_books[filename]['title_sort'] = book.title_sort
-                    metadata_updated = True
-
-
-                # >>> Additional elements <<<
-                # ~~~~~~~~~~ description ~~~~~~~~~~
-                if self.cached_books[filename]['description'] != book.description:
-                    self._log("%s (%s)" % (book.title, book.in_library))
-                    self._log(" description: (device) %s != (library) %s" %
-                        (self.cached_books[filename]['description'], book.description))
-                    self.cached_books[filename]['description'] = book.description
-                    metadata_updated = True
-
-                # ~~~~~~~~~~ subjects ~~~~~~~~~~
-                if self.cached_books[filename]['tags'] != sorted(book.tags):
-                    self._log("%s (%s)" % (book.title, book.in_library))
-                    self._log(" tags: (device) %s != (library) %s" %
-                        (repr(self.cached_books[filename]['tags']), repr(book.tags)))
-                    self.cached_books[filename]['tags'] = book.tags
-                    metadata_updated = True
-
-                # ~~~~~~~~~~ collections ~~~~~~~~~~
-                collection_assignments = self._get_field_items(book)
-                cached_assignments = self.cached_books[filename]['device_collections']
-
-                if cached_assignments != collection_assignments:
-                    self._log("%s (%s)" % (book.title, book.in_library))
-                    self._log(" collections: (device) %s != (library) %s" %
-                        (cached_assignments, collection_assignments))
-                    self.cached_books[filename]['device_collections'] = sorted(collection_assignments)
-                    metadata_updated = True
-
-                # ~~~~~~~~~~ cover ~~~~~~~~~~
-                cover = book.get('thumbnail')
-                if cover:
-                    #self._log("thumb_width: %s" % cover[0])
-                    #self._log("thumb_height: %s" % cover[1])
-                    cover_hash = hashlib.md5(cover[2]).hexdigest()
-                    if self.cached_books[filename]['cover_hash'] != cover_hash:
-                        self._log("%s (%s)" % (book.title, book.in_library))
-                        self._log(" cover: (device) %s != (library) %s" %
-                                             (self.cached_books[filename]['cover_hash'], cover_hash))
-                        self.cached_books[filename]['cover_hash'] = cover_hash
-                        cover_updated = True
-                        metadata_updated = True
-                else:
-                    self._log(">>>no cover available for '%s'<<<" % book.title)
-
-
-                # Generate the delta description
-                if metadata_updated:
-                    # Add the book to command file
-                    book_tag = Tag(command_soup, 'book')
-                    book_tag['author'] = escape(', '.join(book.authors))
-                    book_tag['authorsort'] = escape(book.author_sort)
-                    book_tag['filename'] = escape(filename)
-                    #book_tag['pubdate'] = book.pubdate
-                    #self._log("book.pubdate: %s" % repr(book.pubdate))
-                    #self._log("pubdate: %s" % repr(time.mktime(book.pubdate.timetuple())))
-
-                    book_tag['pubdate'] = strftime('%Y-%m-%d', t=book.pubdate)
-                    book_tag['publisher'] = ''
-                    if book.publisher is not None:
-                        book_tag['publisher'] = escape(book.publisher)
-                    book_tag['series'] = ''
-                    if book.series:
-                        book_tag['series'] = escape(book.series)
-                    book_tag['seriesindex'] = ''
-                    if book.series_index:
-                       book_tag['seriesindex'] = book.series_index
-                    book_tag['title'] = escape(book.title)
-                    book_tag['titlesort'] = escape(book.title_sort)
-                    book_tag['uuid'] = book.uuid
-
-                    # Add the cover
-                    if cover_updated:
-                        cover_tag = Tag(command_soup, 'cover')
-                        cover_tag['hash'] = cover_hash
-                        cover_tag['encoding'] = 'base64'
-                        cover_tag.insert(0, base64.b64encode(cover[2]))
-                        book_tag.insert(0, cover_tag)
-
-                    # Add the subjects
-                    subjects_tag = Tag(command_soup, 'subjects')
-                    for tag in sorted(book.tags, reverse=True):
-                        subject_tag = Tag(command_soup, 'subject')
-                        subject_tag.insert(0, escape(tag))
-                        subjects_tag.insert(0, subject_tag)
-                    book_tag.insert(0, subjects_tag)
-
-                    # Add the collections
-                    collections_tag = Tag(command_soup, 'collections')
-                    if collection_assignments:
-                        for tag in collection_assignments:
-                            c_tag = Tag(command_soup, 'collection')
-                            c_tag.insert(0, escape(tag))
-                            collections_tag.insert(0, c_tag)
-                    book_tag.insert(0, collections_tag)
-
-                    # Add the description
-                    try:
-                        description_tag = Tag(command_soup, 'description')
-                        description_tag.insert(0, escape(book.comments))
-                        book_tag.insert(0, description_tag)
-                    except:
-                        pass
-
-                    command_soup.manifest.insert(0, book_tag)
-
-                    changed += 1
-
-            if changed:
-                self._log_location("sending update_metadata() command, %d changes detected" % changed)
-
-                # Stage the command file
-                self._stage_command_file(command_name, command_soup, show_command=self.prefs.get('developer_mode', False))
-
-                # Wait for completion
-                self._wait_for_command_completion(command_name)
-            else:
-                self._log("no metadata changes detected")
+                # Copy the updated db to the iDevice
+                self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
 
     def upload_books(self, files, names, on_card=None, end_session=True, metadata=None):
         '''
@@ -904,324 +436,160 @@ if True:
         be used in preference. The thumbnail attribute is of the form
         (width, height, cover_data as jpeg).
 
-        Progress is reported in two phases:
-            1) Transfer of files to Marvin's staging area
-            2) Marvin's completion of imports
         '''
         self._log_location()
-        return
 
 
-        # Process the selected files
-        file_count = float(len(files))
-        new_booklist = []
-        self.active_flags = {}
-        self.malformed_books = []
-        self.metadata_updates = []
-        self.replaced_books = []
-        self.skipped_books = []
-        self.update_list = []
-        self.user_feedback_after_callback = None
-
-        for (i, fpath) in enumerate(files):
-
-            # Selective processing flag
-            metadata_only = False
-
-            # Test if target_epub exists
-            target_epub = self.path_template.format(metadata[i].uuid)
-            target_epub_exists = False
-            if target_epub in self.cached_books:
-                # Test for UUID match
-                target_epub_exists = True
-                self._log("'%s' already exists in Marvin (UUID match)" % metadata[i].title)
-            else:
-                # Test for author/title match
-                for book in self.cached_books:
-                    if (self.cached_books[book]['title'] == metadata[i].title and
-                        self.cached_books[book]['authors'] == metadata[i].authors):
-                        self._log("'%s' already exists in Marvin (author match)" % metadata[i].title)
-                        target_epub = book
-                        target_epub_exists = True
-                        break
-                else:
-                    self._log("'%s' by %s does not exist in Marvin" % (metadata[i].title, metadata[i].authors))
-
-            if target_epub_exists:
-                if self.prefs.get('marvin_protect_rb', True):
-                    '''
-                    self._log("fpath: %s" % fpath)
-                    with open(fpath, 'rb') as f:
-                        stream = cStringIO.StringIO(f.read())
-                    mi = get_metadata(stream, extract_cover=False)
-                    self._log(mi)
-                    '''
-                    #self._log(self.cached_books.keys())
-                    self._log("'%s' exists on device, skipping (overwrites disabled)" % target_epub)
-                    self.skipped_books.append({'title': metadata[i].title,
-                                               'authors': metadata[i].authors,
-                                               'uuid': metadata[i].uuid})
-                    continue
-                elif self.prefs.get('marvin_update_rb', False):
-                    # Save active flags for this book
-                    active_flags = []
-                    for flag in self.flags.values():
-                        if flag in self.cached_books[target_epub]['device_collections']:
-                            active_flags.append(flag)
-                    self.active_flags[metadata[i].uuid] = active_flags
-
-                    # Schedule metadata update
-                    self.metadata_updates.append({'title': metadata[i].title,
-                        'authors': metadata[i].authors, 'uuid': metadata[i].uuid})
-                    self._schedule_metadata_update(target_epub, metadata[i], update_soup)
-                    self.update_list.append(self.cached_books[target_epub])
-                    metadata_only = True
-
-            # Normal upload begins here
-            # Update the book at fpath with metadata xform
-            try:
-                mi_x = self._update_epub_metadata(fpath, metadata[i])
-            except:
-                self.malformed_books.append({'title': metadata[i].title,
-                                             'authors': metadata[i].authors,
-                                             'uuid': metadata[i].uuid})
-                self._log("error updating epub metadata for '%s'" % metadata[i].title)
-                import traceback
-                self._log(traceback.format_exc())
-                continue
-
-            # Generate thumb for calibre Device view
-            thumb = self._cover_to_thumb(mi_x)
-
-            if not metadata_only:
-                # If this book on device, remove and add to update_list
-                path = self.path_template.format(metadata[i].uuid)
-                self._remove_existing_copy(path, metadata[i])
-
-            # Populate Book object for new_booklist
-            this_book = self._create_new_book(fpath, metadata[i], mi_x, thumb)
-
-            if not metadata_only:
-                # Create <book> for manifest with filename=, coverhash=
-                book_tag = Tag(upload_soup, 'book')
-                book_tag['filename'] = this_book.path
-                book_tag['coverhash'] = this_book.cover_hash
-
-                # Add <collections> to <book>
-                if this_book.device_collections:
-                    collections_tag = Tag(upload_soup, 'collections')
-                    for tag in this_book.device_collections:
-                        c_tag = Tag(upload_soup, 'collection')
-                        c_tag.insert(0, tag)
-                        collections_tag.insert(0, c_tag)
-                    book_tag.insert(0, collections_tag)
-
-                upload_soup.manifest.insert(i, book_tag)
-
-            new_booklist.append(this_book)
-
-            if not metadata_only:
-                # Copy the book file to the staging folder
-                destination = '/'.join([self.staging_folder, book_tag['filename']])
-                self.ios.copy_to_idevice(str(fpath), str(destination))
-                if target_epub_exists:
-                    self.replaced_books.append({'title': metadata[i].title,
-                                                'authors': metadata[i].authors,
-                                                'uuid': metadata[i].uuid})
-
-            # Add new book to cached_books
-            self.cached_books[this_book.path] = {
-                    'author': this_book.author,
-                    'authors': this_book.authors,
-                    'author_sort': this_book.author_sort,
-                    'cover_hash': this_book.cover_hash,
-                    'description': this_book.description,
-                    'device_collections': this_book.device_collections,
-                    'pubdate': this_book.pubdate,
-                    'publisher': this_book.publisher,
-                    'series': this_book.series,
-                    'series_index': this_book.series_index,
-                    'tags': this_book.tags,
-                    'title': this_book.title,
-                    'title_sort': this_book.title_sort,
-                    'uuid': this_book.uuid,
-                    }
-
-            # Report progress
-            if self.report_progress is not None:
-                self.report_progress((i + 1) / (file_count * 2),
-                    '%(num)d of %(tot)d transferred to Marvin' % dict(num=i + 1, tot=file_count))
-
-        manifest_count = len(upload_soup.manifest.findAll(True))
-        if manifest_count:
-            # Copy the command file to the staging folder
-            self._stage_command_file("upload_books", upload_soup, show_command=self.prefs.get('developer_mode', False))
-
-            # Wait for completion
-            self._wait_for_command_completion("upload_books")
-
-        # Perform metadata updates
-        if self.metadata_updates:
-            self._log("Sending metadata updates")
-
-            # Copy the command file to the staging folder
-            self._stage_command_file("update_metadata", update_soup, show_command=self.prefs.get('developer_mode', False))
-
-            # Wait for completion
-            self._wait_for_command_completion("update_metadata")
-
-        if (self.malformed_books or self.skipped_books or
-            self.metadata_updates or self.replaced_books):
-            self._report_upload_results(len(files))
-
-        return (new_booklist, [], [])
-
-    # helpers
+    # ~~~~~~~~~~~~~~~~~~~~ Helpers ~~~~~~~~~~~~~~~~~~~~
     def _cover_to_thumb(self, metadata):
         '''
-        Generate a cover thumb matching the size retrieved from Marvin's database
+        Generate a cover thumb in base64 encoding
         SmallCoverJpg: 180x270
-        LargeCoverJpg: 450x675
         '''
         from PIL import Image as PILImage
 
-        GOODREADER_COVER_WIDTH = 180
-        GOODREADER_COVER_HEIGHT = 270
+        COVER_WIDTH = 180
+        COVER_HEIGHT = 270
 
         self._log_location(metadata.title)
 
         thumb = None
 
-        if metadata.cover:
+        if metadata.cover_data:
+            #self._log(repr(metadata.cover_data))
             try:
                 # Resize for local thumb
-                im = PILImage.open(metadata.cover)
-                im = im.resize((GOODREADER_COVER_WIDTH, GOODREADER_COVER_HEIGHT), PILImage.ANTIALIAS)
+                img_data = cStringIO.StringIO(metadata.cover_data[1])
+                im = PILImage.open(img_data)
+                #im = PILImage.fromstring("RGBA", (180,270), str(metadata.cover_data[1]))
+                im = im.resize((COVER_WIDTH, COVER_HEIGHT), PILImage.ANTIALIAS)
                 of = cStringIO.StringIO()
                 im.convert('RGB').save(of, 'JPEG')
                 thumb = of.getvalue()
                 of.close()
 
             except:
-                self._log("ERROR converting '%s' to thumb for '%s'" % (metadata.cover, metadata.title))
+                self._log("ERROR converting thumb for '%s'" % (metadata.title))
                 import traceback
                 traceback.print_exc()
         else:
             self._log("ERROR: no cover available for '%s'" % metadata.title)
         return thumb
 
-    def _create_new_book(self, fpath, metadata, metadata_x, thumb):
+
+    def _get_cached_metadata(self, cur, book):
         '''
-        Need original metadata for id, uuid
-        Need metadata_x for transformed title, author
+        Return a populated Book object from a cached book's metadata
         '''
-        from calibre import strftime
-        from calibre.ebooks.metadata import authors_to_string
+        self._log_location(json.dumps(book))
 
-        self._log_location(metadata_x.title)
+        cur.execute('''
+                        SELECT
+                         authors,
+                         author_sort,
+                         dateadded,
+                         filename,
+                         size,
+                         thumb_data,
+                         title,
+                         title_sort
+                        FROM metadata
+                        WHERE filename = {0}
+                    '''.format(json.dumps(book)))
+        cached_book = cur.fetchall()[0]
+        #self._log(cached_book.keys())
 
-        this_book = Book(metadata_x.title, authors_to_string(metadata_x.authors))
-        this_book.author_sort = metadata_x.author_sort
-        this_book.uuid = metadata.uuid
-
-        cover_hash = 0
-
-        # 'thumbnail': (width, height, data)
-        cover = metadata.get('thumbnail')
-        if cover:
-            cover_hash = hashlib.md5(cover[2]).hexdigest()
-        this_book.cover_hash = cover_hash
-
-        this_book.datetime = time.gmtime()
-        #this_book.cid = metadata.id
-        this_book.description = metadata_x.comments
-        this_book.device_collections = self._get_field_items(metadata)
-        if this_book.uuid in self.active_flags:
-            this_book.device_collections = sorted(self.active_flags[this_book.uuid] +
-                                                  this_book.device_collections,
-                                                  key=sort_key)
-        this_book.format = format
-        this_book.path = self.path_template.format(metadata.uuid)
-        this_book.pubdate = strftime("%Y-%m-%d", t=metadata_x.pubdate)
-        this_book.publisher = metadata_x.publisher
-        this_book.series = metadata_x.series
-        this_book.series_index = metadata_x.series_index
-        this_book.size = os.stat(fpath).st_size
-        this_book.tags = metadata_x.tags
-        this_book.thumbnail = thumb
-        this_book.title_sort = metadata_x.title_sort
+        this_book = Book(cached_book[b'title'], cached_book[b'authors'])
+        this_book.author_sort = cached_book[b'author_sort']
+        this_book.datetime = datetime.fromtimestamp(cached_book[b'dateadded']).timetuple()
+        this_book.path = cached_book[b'filename']
+        this_book.size = cached_book[b'size']
+        this_book.thumbnail = base64.b64decode(cached_book[b'thumb_data'])
+        this_book.title_sort = cached_book[b'title_sort']
         return this_book
-
-    def _get_field_items(self, mi, verbose=False):
-        '''
-        Return the metadata from collection_fields for mi
-
-        Collection fields may be supported custom fields:
-            'Comma separated text, like tags, shown in the browser'
-            'Text, column shown in the tag browser'
-            'Text, but with a fixed set of permitted values'
-        '''
-        if verbose:
-            self._log_location(mi.title)
-
-        collection_fields = self.prefs.get('marvin_enabled_collection_fields', [])
-
-        # Build a map of name:field for eligible custom fields
-        eligible_custom_fields = {}
-        for cf in mi.get_all_user_metadata(False):
-            if mi.metadata_for_field(cf)['datatype'] in ['enumeration', 'text']:
-                eligible_custom_fields[mi.metadata_for_field(cf)['name'].lower()] = cf
-
-        # Collect the field items for the specified collection fields
-        field_items = []
-        for field in collection_fields:
-            '''
-            if field.lower() == 'series':
-                if mi.series:
-                    field_items.append(mi.series)
-            elif field.lower() == 'tags':
-                if mi.tags:
-                    for tag in mi.tags:
-                        field_items.append(tag)
-            '''
-            if field.lower() in eligible_custom_fields:
-                value = mi.get(eligible_custom_fields[field.lower()])
-                if value:
-                    if type(value) is list:
-                        field_items += value
-                    elif type(value) in [str, unicode]:
-                        field_items.append(value)
-                    else:
-                        self._log("Unexpected type: '%s'" % type(value))
-            else:
-                self._log_location("'%s': Invalid metadata field specified as collection source: '%s'" %
-                                   (mi.title, field))
-
-        if verbose:
-            self._log("collections: %s" % field_items)
-        return field_items
-
-
-
 
     def _get_metadata(self, book, pdf_stats):
         '''
-        Return a populated Book object with known metadata
+        Return a populated Book object with available metadata
         '''
         from calibre.ebooks.metadata.pdf import get_metadata
-        self._log_location()
+        self._log_location(book)
 
         with open(os.path.join(self.temp_dir, pdf_stats['path']), 'rb') as f:
             stream = cStringIO.StringIO(f.read())
-            mi = get_metadata(stream, cover=False)
+            mi = get_metadata(stream)
         this_book = Book(mi.title, ', '.join(mi.authors))
-        #this_book.author_sort = ???
+        this_book.author_sort = ', '.join(mi.authors)
         this_book.datetime = datetime.fromtimestamp(int(pdf_stats['stats']['st_birthtime'])).timetuple()
+        this_book.dateadded = int(pdf_stats['stats']['st_birthtime'])
         this_book.path = book
         this_book.size = int(pdf_stats['stats']['st_size'])
-        this_book.uuid = None
+        this_book.thumbnail = self._cover_to_thumb(mi)
+        this_book.thumb_data = base64.b64encode(this_book.thumbnail)
+        this_book.title_sort = mi.title
 
+        if False:
+            self._log("%s" % repr(this_book.path))
+            self._log(" %s" % repr(this_book.authors))
+            self._log(" %s" % repr(this_book.dateadded))
         return this_book
+
+    def _localize_database_path(self, remote_db_path):
+        '''
+        Copy remote_db_path from iOS to local storage as needed
+        If it doesn't exist, create a local db
+        '''
+        def _build_local_path():
+            path = remote_db_path.split('/')[-1]
+            if iswindows:
+                from calibre.utils.filenames import shorten_components_to
+                plen = len(self.temp_dir)
+                path = ''.join(shorten_components_to(245-plen, [path]))
+
+            full_path = os.path.join(self.temp_dir, path)
+            return full_path
+
+        self._log_location("remote_db_path: '%s'" % (remote_db_path))
+
+        local_db_path = None
+        db_stats = {}
+
+        db_stats = self.ios.stat(remote_db_path)
+        if db_stats:
+            full_path = _build_local_path()
+            if os.path.exists(full_path):
+                lfs = os.stat(full_path)
+                if (int(db_stats['st_mtime']) == lfs.st_mtime and
+                    int(db_stats['st_size']) == lfs.st_size):
+                    local_db_path = full_path
+
+            if not local_db_path:
+                with open(full_path, 'wb') as out:
+                    self.ios.copy_from_idevice(remote_db_path, out)
+                local_db_path = out.name
+        else:
+            local_db_path = _build_local_path()
+            self._log("creating local metadata db '%s'" % local_db_path)
+            conn = sqlite3.connect(local_db_path)
+            conn.row_factory = sqlite3.Row
+            conn.execute('''PRAGMA user_version={0}'''.format(1))
+            conn.executescript('''
+                                CREATE TABLE IF NOT EXISTS metadata
+                                    (
+                                    authors TEXT,
+                                    author_sort TEXT,
+                                    dateadded INTEGER,
+                                    filename TEXT UNIQUE,
+                                    size INTEGER,
+                                    thumb_data BLOB,
+                                    title TEXT,
+                                    title_sort TEXT
+                                    );
+                                ''')
+            conn.commit()
+            conn.close()
+
+        return {'path': local_db_path, 'stats': db_stats}
 
     def _localize_pdf(self, remote_path):
         '''
@@ -1256,469 +624,4 @@ if True:
             raise DatabaseNotFoundException
 
         return {'path': local_path, 'stats': pdf_stats}
-
-
-
-
-    def _remove_existing_copy(self, path, metadata):
-        '''
-        '''
-        for book in self.cached_books:
-            matched = False
-            if self.cached_books[book]['uuid'] == metadata.uuid:
-                matched = True
-                self._log_location("'%s' matched on uuid '%s'" % (metadata.title, metadata.uuid))
-            elif (self.cached_books[book]['title'] == metadata.title and
-                  self.cached_books[book]['author'] == metadata.author):
-                matched = True
-                self._log_location("'%s' matched on author '%s'" % (metadata.title, metadata.author))
-            if matched:
-                self.update_list.append(self.cached_books[book])
-                self.delete_books([path])
-                break
-
-    def _report_upload_results(self, total_sent):
-        '''
-        Display results of upload operation
-        We can have skipped books or replaced books, or updated metadata
-        If there were errors (malformed ePubs), that takes precedence.
-        '''
-        self._log_location("total_sent: %d" % total_sent)
-
-        title = "Send to device"
-        total_added = (total_sent - len(self.malformed_books) - len(self.skipped_books) -
-                       len(self.replaced_books) - len(self.metadata_updates))
-        details = ''
-        if total_added:
-            details = "{0} {1} successfully added to Marvin.\n\n".format(total_added,
-                                                          'books' if total_added > 1 else 'book')
-
-        if self.malformed_books:
-            msg = ("Warnings reported while sending to Marvin.\n" +
-                            "Click 'Show details' for a summary.\n")
-
-            details += u"The following malformed {0} not added to Marvin:\n".format(
-                        'books were' if len(self.malformed_books) > 1 else 'book was')
-            for book in self.malformed_books:
-                details += u" - '{0}' by {1}\n".format(book['title'],
-                                                      ','.join(book['authors']))
-            if self.skipped_books:
-                details += u"\nThe following {0} already installed in Marvin:\n".format(
-                            'books were' if len(self.skipped_books) > 1 else 'book was')
-                for book in self.skipped_books:
-                    details += u" - '{0}' by {1}\n".format(book['title'],
-                                                       ', '.join(book['authors']))
-                details += "\nUpdate behavior may be changed in the plugin's Marvin Options settings."
-            elif self.replaced_books:
-                details += u"\nThe following {0} replaced in Marvin:\n".format(
-                            'books were' if len(self.replaced_books) > 1 else 'book was')
-                for book in self.replaced_books:
-                    details += u" + '{0}' by {1}\n".format(book['title'],
-                                                       ', '.join(book['authors']))
-                details += "\nReplacement behavior may be changed in the plugin's Marvin Options settings."
-            elif self.metadata_updates:
-                details += u"\nMetadata was updated for the following {0}:\n".format(
-                            'books' if len(self.metadata_updates) > 1 else 'book')
-                for book in self.metadata_updates:
-                    details += u" + '{0}' by {1}\n".format(book['title'],
-                                                           ', '.join(book['authors']))
-                details += "\nUpdate behavior may be changed in the plugin's Marvin Options settings."
-
-        # If we skipped any books during upload_books due to overwrite switch, inform user
-        elif self.skipped_books:
-            msg = ("Replacement of existing books is disabled in the plugin's Marvin Options settings.\n"
-                   "Click 'Show details' for a summary.\n")
-
-            details += u"The following {0} already installed in Marvin:\n".format(
-                            'books were' if len(self.skipped_books) > 1 else 'book was')
-            for book in self.skipped_books:
-                details += u" - '{0}' by {1}\n".format(book['title'],
-                                                       ', '.join(book['authors']))
-            details += "\nOverwrite behavior may be changed in the plugin's Marvin Options settings."
-
-        # If we replaced any books, inform user
-        elif self.replaced_books:
-            msg = ("{0} {1} replaced in Marvin.\n".format(len(self.replaced_books),
-                            'books were' if len(self.replaced_books) > 1 else 'book was') +
-                            "Click 'Show details' for a summary.\n")
-
-            details += u"The following {0} replaced in Marvin:\n".format(
-                            'books were' if len(self.replaced_books) > 1 else 'book was')
-            for book in self.replaced_books:
-                details += u" + '{0}' by {1}\n".format(book['title'],
-                                                       ', '.join(book['authors']))
-            details += "\nReplacement behavior may be changed in the plugin's Marvin Options settings."
-
-        # If we updated metadata, inform user
-        elif self.metadata_updates:
-            msg = ("Updated metadata for {0} {1}.\n".format(len(self.metadata_updates),
-                                                           'books' if len(self.metadata_updates) > 1 else 'book') +
-                  "Click 'Show details' for a summary.\n")
-
-            details += u"Metadata was updated for the following {0}:\n".format(
-                       'books' if len(self.metadata_updates) > 1 else 'book')
-            for book in self.metadata_updates:
-                details += u" + '{0}' by {1}\n".format(book['title'],
-                                                   ', '.join(book['authors']))
-            details += "\nUpdate behavior may be changed in the plugin's Marvin Options settings."
-
-        self.user_feedback_after_callback = {
-              'title': title,
-                'msg': msg,
-            'det_msg': details
-            }
-
-    def _reset_ios_connection(self,
-                              app_installed=False,
-                              device_name=None,
-                              ejected=False,
-                              udid=0,
-                              verbose=True):
-        if verbose:
-            connection_state = ("connected:{0:1} app_installed:{1:1} device_name:{2} udid:{3}".format(
-                self.ios_connection['connected'],
-                self.ios_connection['app_installed'],
-                self.ios_connection['device_name'],
-                self.ios_connection['udid'])
-                )
-
-            self._log_location(connection_state)
-
-        self.ios_connection['app_installed'] = app_installed
-        self.ios_connection['connected'] = False
-        self.ios_connection['device_name'] = device_name
-        self.ios_connection['udid'] = udid
-
-    def _schedule_metadata_update(self, target_epub, book, update_soup):
-        '''
-        Generate metadata update content for individual book
-        '''
-        from xml.sax.saxutils import escape
-        from calibre import strftime
-
-        self._log_location(book.title)
-
-        book_tag = Tag(update_soup, 'book')
-        book_tag['author'] = escape(', '.join(book.authors))
-        book_tag['authorsort'] = escape(book.author_sort)
-        book_tag['filename'] = escape(target_epub)
-        book_tag['pubdate'] = strftime('%Y-%m-%d', t=book.pubdate)
-        book_tag['publisher'] = ''
-        if book.publisher is not None:
-            book_tag['publisher'] = escape(book.publisher)
-        book_tag['series'] = ''
-        if book.series:
-            book_tag['series'] = escape(book.series)
-        book_tag['seriesindex'] = ''
-        if book.series_index:
-           book_tag['seriesindex'] = book.series_index
-        book_tag['title'] = escape(book.title)
-        book_tag['titlesort'] = escape(book.title_sort)
-        book_tag['uuid'] = book.uuid
-
-        # Cover
-        cover = book.get('thumbnail')
-        if cover:
-            #self._log("thumb_width: %s" % cover[0])
-            #self._log("thumb_height: %s" % cover[1])
-            cover_hash = hashlib.md5(cover[2]).hexdigest()
-            if self.cached_books[target_epub]['cover_hash'] != cover_hash:
-                self._log("%s" % (target_epub))
-                self._log(" cover: (device) %s != (library) %s" %
-                                     (self.cached_books[target_epub]['cover_hash'], cover_hash))
-                self.cached_books[target_epub]['cover_hash'] = cover_hash
-                cover_tag = Tag(update_soup, 'cover')
-                cover_tag['hash'] = cover_hash
-                cover_tag['encoding'] = 'base64'
-                cover_tag.insert(0, base64.b64encode(cover[2]))
-                book_tag.insert(0, cover_tag)
-            else:
-                self._log(" '%s': cover is up to date" % book.title)
-
-        else:
-            self._log(">>>no cover available for '%s'<<<" % book.title)
-
-        # Add the subjects
-        subjects_tag = Tag(update_soup, 'subjects')
-        for tag in sorted(book.tags, reverse=True):
-            subject_tag = Tag(update_soup, 'subject')
-            subject_tag.insert(0, escape(tag))
-            subjects_tag.insert(0, subject_tag)
-        book_tag.insert(0, subjects_tag)
-
-        # Add the collections
-        collection_assignments = self._get_field_items(book)
-        cached_assignments = self.cached_books[target_epub]['device_collections']
-        # Remove flags before testing equality
-        active_flags = []
-        for flag in self.flags.values():
-            if flag in cached_assignments:
-                cached_assignments.remove(flag)
-                active_flags.append(flag)
-
-        if cached_assignments != collection_assignments:
-            self._log(" collections: (device) %s != (library) %s" %
-                (cached_assignments, collection_assignments))
-            self.cached_books[target_epub]['device_collections'] = sorted(
-                active_flags + collection_assignments, key=sort_key)
-
-        collections_tag = Tag(update_soup, 'collections')
-        if collection_assignments:
-            for tag in collection_assignments:
-                c_tag = Tag(update_soup, 'collection')
-                c_tag.insert(0, escape(tag))
-                collections_tag.insert(0, c_tag)
-        book_tag.insert(0, collections_tag)
-
-        # Add the description
-        try:
-            description_tag = Tag(update_soup, 'description')
-            description_tag.insert(0, escape(book.comments))
-            book_tag.insert(0, description_tag)
-        except:
-            pass
-
-        update_soup.manifest.insert(0, book_tag)
-
-    def _stage_command_file(self, command_name, command_soup, show_command=False):
-        self._log_location(command_name)
-
-        if show_command:
-            if command_name == 'update_metadata':
-                soup = BeautifulStoneSoup(command_soup.renderContents())
-                # <descriptions>
-                descriptions = soup.findAll('description')
-                for description in descriptions:
-                    d_tag = Tag(soup, 'description')
-                    d_tag.insert(0, "(description removed for debug stream)")
-                    description.replaceWith(d_tag)
-                # <covers>
-                covers = soup.findAll('cover')
-                for cover in covers:
-                    cover_tag = Tag(soup, 'cover')
-                    cover_tag.insert(0, "(cover removed for debug stream)")
-                    cover.replaceWith(cover_tag)
-                self._log(soup.prettify())
-            else:
-                self._log("command_name: %s" % command_name)
-                self._log(command_soup.prettify())
-
-        self.ios.write(command_soup.renderContents(),
-                       b'/'.join([self.staging_folder, b'%s.tmp' % command_name]))
-        self.ios.rename(b'/'.join([self.staging_folder, b'%s.tmp' % command_name]),
-                        b'/'.join([self.staging_folder, b'%s.xml' % command_name]))
-
-    def _update_epub_metadata(self, fpath, metadata):
-        '''
-        Apply plugboard metadata transforms to book
-        Return transformed metadata
-        '''
-        from calibre import strftime
-        from calibre.ebooks.metadata.epub import set_metadata
-
-        self._log_location(metadata.title)
-
-        # Fetch plugboard transforms
-        metadata_x = self._xform_metadata_via_plugboard(metadata, 'epub')
-
-        # Refresh epub metadata
-        with open(fpath, 'r+b') as zfo:
-            if False:
-                try:
-                    zf_opf = ZipFile(fpath, 'r')
-                    fnames = zf_opf.namelist()
-                    opf = [x for x in fnames if '.opf' in x][0]
-                except:
-                    raise UserFeedback("'%s' is not a valid EPUB" % metadata.title,
-                                       None,
-                                       level=UserFeedback.WARN)
-
-                #Touch the OPF timestamp
-                opf_tree = etree.fromstring(zf_opf.read(opf))
-                md_els = opf_tree.xpath('.//*[local-name()="metadata"]')
-                if md_els:
-                    ts = md_els[0].find('.//*[@name="calibre:timestamp"]')
-                    if ts is not None:
-                        timestamp = ts.get('content')
-                        old_ts = parse_date(timestamp)
-                        metadata.timestamp = datetime.datetime(old_ts.year, old_ts.month, old_ts.day, old_ts.hour,
-                                                   old_ts.minute, old_ts.second, old_ts.microsecond + 1, old_ts.tzinfo)
-                        if DEBUG:
-                            logger().info("   existing timestamp: %s" % metadata.timestamp)
-                    else:
-                        metadata.timestamp = now()
-                        if DEBUG:
-                            logger().info("   add timestamp: %s" % metadata.timestamp)
-
-                else:
-                    metadata.timestamp = now()
-                    if DEBUG:
-                        logger().warning("   missing <metadata> block in OPF file")
-                        logger().info("   add timestamp: %s" % metadata.timestamp)
-
-                zf_opf.close()
-
-            # If 'News' in tags, tweak the title/author for friendlier display in iBooks
-            if _('News') in metadata_x.tags or \
-               _('Catalog') in metadata_x.tags:
-                if metadata_x.title.find('[') > 0:
-                    metadata_x.title = metadata_x.title[:metadata_x.title.find('[') - 1]
-                date_as_author = '%s, %s %s, %s' % (strftime('%A'), strftime('%B'), strftime('%d').lstrip('0'), strftime('%Y'))
-                metadata_x.author = metadata_x.authors = [date_as_author]
-                sort_author = re.sub('^\s*A\s+|^\s*The\s+|^\s*An\s+', '', metadata_x.title).rstrip()
-                metadata_x.author_sort = '%s %s' % (sort_author, strftime('%Y-%m-%d'))
-
-            if False:
-                # If windows & series, nuke tags so series used as Category during _update_iTunes_metadata()
-                if iswindows and metadata_x.series:
-                    metadata_x.tags = None
-
-            set_metadata(zfo, metadata_x, apply_null=True, update_timestamp=True)
-
-        return metadata_x
-
-    def _wait_for_command_completion(self, command_name):
-        '''
-        Wait for Marvin to issue progress reports via status.xml
-        Marvin creates status.xml upon receiving command, increments <progress>
-        from 0.0 to 1.0 as command progresses.
-        '''
-        from threading import Timer
-
-        self._log_location(command_name)
-        self._log("%s: waiting for '%s'" %
-                                     (datetime.now().strftime('%H:%M:%S.%f'),
-                                     self.status_fs))
-
-        # Set initial watchdog timer for ACK
-        WATCHDOG_TIMEOUT = 10.0
-        watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-        self.operation_timed_out = False
-        watchdog.start()
-
-        while True:
-            if not self.ios.exists(self.status_fs):
-                # status.xml not created yet
-                if self.operation_timed_out:
-                    self.ios.remove(self.status_fs)
-                    raise UserFeedback("Marvin operation timed out.",
-                                        details=None, level=UserFeedback.WARN)
-                time.sleep(0.10)
-
-            else:
-                watchdog.cancel()
-
-                self._log("%s: monitoring progress of %s" %
-                                     (datetime.now().strftime('%H:%M:%S.%f'),
-                                      command_name))
-
-                # Start a new watchdog timer per iteration
-                watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-                self.operation_timed_out = False
-                watchdog.start()
-
-                code = '-1'
-                current_timestamp = 0.0
-                while code == '-1':
-                    try:
-                        if self.operation_timed_out:
-                            self.ios.remove(self.status_fs)
-                            raise UserFeedback("Marvin operation timed out.",
-                                                details=None, level=UserFeedback.WARN)
-
-                        status = etree.fromstring(self.ios.read(self.status_fs))
-                        code = status.get('code')
-                        timestamp = float(status.get('timestamp'))
-                        if timestamp != current_timestamp:
-                            current_timestamp = timestamp
-                            d = datetime.now()
-                            progress = float(status.find('progress').text)
-                            self._log("{0}: {1:>2} {2:>3}%".format(
-                                                 d.strftime('%H:%M:%S.%f'),
-                                                 code,
-                                                 "%3.0f" % (progress * 100)))
-
-                            # Report progress
-                            if self.report_progress is not None:
-                                self.report_progress(0.5 + progress/2, '')
-
-                            # Reset watchdog timer
-                            watchdog.cancel()
-                            watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
-                            watchdog.start()
-                        time.sleep(0.01)
-
-                    except:
-                        time.sleep(0.01)
-                        self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
-
-                # Command completed
-                watchdog.cancel()
-
-                final_code = status.get('code')
-                if final_code != '0':
-                    if final_code == '-1':
-                        final_status= "in progress"
-                    if final_code == '1':
-                        final_status = "warnings"
-                    if final_code == '2':
-                        final_status = "errors"
-
-                    messages = status.find('messages')
-                    msgs = [msg.text for msg in messages]
-                    details = "code: %s\n" % final_code
-                    details += '\n'.join(msgs)
-                    self._log(details)
-                    raise UserFeedback("Marvin reported %s.\nClick 'Show details' for more information."
-                                        % (final_status),
-                                       details=details, level=UserFeedback.WARN)
-
-                self.ios.remove(self.status_fs)
-
-                self._log("%s: '%s' complete" %
-                                     (datetime.now().strftime('%H:%M:%S.%f'),
-                                      command_name))
-                break
-
-        if self.report_progress is not None:
-            self.report_progress(1.0, _('finished'))
-
-    def _watchdog_timed_out(self):
-        '''
-        Set flag if I/O operation times out
-        '''
-        self._log_location(datetime.now().strftime('%H:%M:%S.%f'))
-        self.operation_timed_out = True
-
-    def _xform_metadata_via_plugboard(self, book, format):
-        '''
-        '''
-        self._log_location(book.title)
-
-        if self.plugboard_func:
-            pb = self.plugboard_func(self.DEVICE_PLUGBOARD_NAME, format, self.plugboards)
-            newmi = book.deepcopy_metadata()
-            newmi.template_to_attribute(book, pb)
-            if pb is not None and self.verbose:
-                #self._log("transforming %s using %s:" % (format, pb))
-                self._log("       title: %s %s" % (book.title, ">>> '%s'" %
-                                           newmi.title if book.title != newmi.title else ''))
-                self._log("  title_sort: %s %s" % (book.title_sort, ">>> %s" %
-                                           newmi.title_sort if book.title_sort != newmi.title_sort else ''))
-                self._log("     authors: %s %s" % (book.authors, ">>> %s" %
-                                           newmi.authors if book.authors != newmi.authors else ''))
-                self._log(" author_sort: %s %s" % (book.author_sort, ">>> %s" %
-                                           newmi.author_sort if book.author_sort != newmi.author_sort else ''))
-                self._log("    language: %s %s" % (book.language, ">>> %s" %
-                                           newmi.language if book.language != newmi.language else ''))
-                self._log("   publisher: %s %s" % (book.publisher, ">>> %s" %
-                                           newmi.publisher if book.publisher != newmi.publisher else ''))
-                self._log("        tags: %s %s" % (book.tags, ">>> %s" %
-                                           newmi.tags if book.tags != newmi.tags else ''))
-            else:
-                self._log("  no matching plugboard")
-        else:
-            newmi = book
-        return newmi
-
 
