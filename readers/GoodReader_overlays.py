@@ -128,14 +128,14 @@ if True:
                                           title_sort,
                                           uuid)
                                         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                                        (' & '.join(this_book.authors),
-                                         this_book.author_sort,
+                                        (unicode(' & '.join(this_book.authors)),
+                                         unicode(this_book.author_sort),
                                          this_book.dateadded,
                                          this_book.path,
                                          this_book.size,
                                          this_book.thumb_data,
-                                         this_book.title,
-                                         this_book.title_sort,
+                                         unicode(this_book.title),
+                                         unicode(this_book.title_sort),
                                          this_book.uuid)
                                         )
                     if self.report_progress is not None:
@@ -477,16 +477,17 @@ if True:
                         #self._log("database: %s %s" % (cached_book[b'title'], [cached_book[b'authors']]))
 
                         cur.execute('''UPDATE metadata
-                                       SET authors = {0},
-                                           author_sort = {1},
-                                           title = {2},
-                                           title_sort = {3}
+                                       SET authors = "{0}",
+                                           author_sort = "{1}",
+                                           title = "{2}",
+                                           title_sort = "{3}"
                                        WHERE filename = {4}
-                                    '''.format(json.dumps(' & '.join(book.authors)),
-                                               json.dumps(author_to_author_sort(book.authors[0])),
-                                               json.dumps(book.title),
-                                               json.dumps(title_sort(book.title)),
+                                    '''.format(self._escape_delimiters(' & '.join(book.authors)),
+                                               self._escape_delimiters(author_to_author_sort(book.authors[0])),
+                                               self._escape_delimiters(book.title),
+                                               self._escape_delimiters(title_sort(book.title)),
                                                json.dumps(book.path)))
+
                 con.commit()
 
             # Copy the updated db to the iDevice
@@ -539,14 +540,14 @@ if True:
                                   title_sort,
                                   uuid)
                                 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                                (' & '.join(this_book.authors),
-                                 this_book.author_sort,
+                                (unicode(' & '.join(this_book.authors)),
+                                 unicode(this_book.author_sort),
                                  this_book.dateadded,
                                  this_book.path,
                                  this_book.size,
                                  this_book.thumb_data,
-                                 this_book.title,
-                                 this_book.title_sort,
+                                 unicode(this_book.title),
+                                 unicode(this_book.title_sort),
                                  this_book.uuid)
                                 )
                 if self.report_progress is not None:
@@ -638,6 +639,15 @@ if True:
             self._log("author_sort: %s" % this_book.author_sort)
             self._log("title_sort: %s" % this_book.title_sort)
         return this_book
+
+    def _escape_delimiters(self, s):
+        '''
+        Switch double quotes to single quotes, escape single quotes, return as unicode
+        '''
+        #self._log_location(repr(s))
+        s = s.replace("'", "\'")
+        s = s.replace('"', '\'')
+        return unicode(s)
 
     def _get_cached_metadata(self, cur, book):
         '''
