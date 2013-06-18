@@ -50,7 +50,9 @@ else:
 
 plugin_prefs = JSONConfig('plugins/iOS reader applications')
 
-# List of app names as installed by iOS. Prefix with 'b' for libiMobileDevice
+# List of app names as installed by iOS. Prefix with 'b' for libiMobileDevice.
+# These are the names that appear in the Config dialog for Preferred reader application
+# 'iBooks' is removed under linux
 READER_APP_ALIASES = {
                       'iBooks':     [b'com.apple.iBooks'],
                       'GoodReader': [b'com.goodiware.GoodReaderIPad'],
@@ -58,7 +60,7 @@ READER_APP_ALIASES = {
                      }
 
 # Supported formats. Not required for iBooks, as the ITUNES class handles formats,
-# included for clarity.
+# but included for clarity.
 READER_APP_FORMATS = {
                       'iBooks':     ['epub', 'pdf'],
                       'GoodReader': ['pdf'],
@@ -66,13 +68,9 @@ READER_APP_FORMATS = {
                      }
 
 READER_APP_ICONS = [
-    'images/BluefireReader.png',
     'images/GoodReader.png',
     'images/iBooks.png',
-    'images/Kindle.png',
-    'images/Kobo.png',
     'images/Marvin.png',
-    'images/Stanza.png'
     ]
 
 class Book(Metadata):
@@ -340,9 +338,9 @@ class DriverBase(DeviceConfig, DevicePlugin):
         '''
         self._log_location()
         from calibre_plugins.ios_reader_apps.config import ConfigWidget
-        applist = ['GoodReader', 'Marvin']
-        if not islinux:
-            applist += ['iBooks']
+        applist = READER_APP_ALIASES.keys()
+        if islinux and 'iBooks' in applist:
+            applist.remove('iBooks')
         self.cw = ConfigWidget(self, applist)
         return self.cw
 

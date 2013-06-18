@@ -102,7 +102,8 @@ if True:
                 rows = cur.fetchall()
                 cached_books = [row[b'filename'] for row in rows]
 
-                # Fetch installed books from /Documents
+                # Fetch installed books from /Documents. GoodReader allows folder nesting
+                # We can only show flat listing in Device view
                 installed_books = self.ios.listdir(b'/Documents')
                 for i, book in enumerate(installed_books):
                     if book in cached_books:
@@ -112,7 +113,11 @@ if True:
                     else:
                         # Make a local copy of the book, get the stats
                         pdf_stats = self._localize_pdf('/'.join(['/Documents', book]))
-                        this_book = self._get_metadata(book, pdf_stats)
+                        try:
+                            this_book = self._get_metadata(book, pdf_stats)
+                        except:
+                            self._log("ERROR reading metadata from %s" % book)
+                            continue
                         booklist.add_book(this_book, False)
                         cached_books.append(book)
                         # Add to calibre_metadata db
@@ -180,13 +185,13 @@ if True:
         self.connected_path is path to Documents/calibre/connected.xml
         self.ios_connection {'udid': <udid>, 'app_installed': True|False, 'connected': True|False}
 
-        Marvin disconnected:
+        iDevice disconnected:
             self.ios_connection: udid:<device>, ejected:False, device_name:<name>,
                                  connected:False, app_installed:True
-        Marvin connected:
+        iDevice connected:
             self.ios_connection: udid:<device>, ejected:False, device_name:<name>,
                                  connected:True, app_installed:True
-        Marvin ejected:
+        iDevice ejected:
             self.ios_connection: udid:<device>, ejected:True, device_name:<name>,
                                  connected:True, app_installed:True
 
@@ -381,6 +386,139 @@ if True:
         '''
         self._log_location()
         self.ios.copy_from_idevice('/'.join(['/Documents', path]), outfile)
+
+    def is_usb_connected(self, devices_on_system, debug=False, only_presence=False):
+        '''
+        Return (True, device_info) if a device handled by this plugin is currently connected,
+        else (False, None)
+        '''
+        if iswindows:
+            return self.is_usb_connected_windows(devices_on_system,
+                    debug=debug, only_presence=only_presence)
+
+
+        # >>> Entry point
+        #self._log_location(self.ios_connection)
+
+        # If we were ejected, test to see if we're still physically connected
+        if self.ejected:
+            for dev in devices_on_system:
+                if isosx:
+                    # dev: (1452L, 4779L, 592L, u'Apple Inc.', u'iPad', u'<udid>')
+                    if self.ios_connection['udid'] == dev[5]:
+                        self._log_location("iDevice physically connected, but ejected")
+                        break
+                elif islinux:
+                    '''
+                    dev: USBDevice(busnum=1, devnum=17, vendor_id=0x05ac, product_id=0x12ab,
+                                   bcd=0x0250, manufacturer=Apple Inc., product=iPad,
+                                   serial=<udid>)
+                    '''
+                    if self.ios_connection['udid'] == dev.serial:
+                        self._log_location("iDevice physically connected, but ejected")
+                        break
+
+            else:
+                self._log_location("iDevice physically disconnected, resetting ios_connection")
+                self._reset_ios_connection()
+                self.ejected = False
+            return False, None
+
+        vendors_on_system = set([x[0] for x in devices_on_system])
+        vendors = self.VENDOR_ID if hasattr(self.VENDOR_ID, '__len__') else [self.VENDOR_ID]
+        if hasattr(self.VENDOR_ID, 'keys'):
+            products = []
+            for ven in self.VENDOR_ID:
+                products.extend(self.VENDOR_ID[ven].keys())
+        else:
+            products = self.PRODUCT_ID if hasattr(self.PRODUCT_ID, '__len__') else [self.PRODUCT_ID]
+
+        for vid in vendors:
+            if vid in vendors_on_system:
+                for dev in devices_on_system:
+                    cvid, pid, bcd = dev[:3]
+                    if cvid == vid:
+                        if pid in products:
+                            if hasattr(self.VENDOR_ID, 'keys'):
+                                try:
+                                    cbcd = self.VENDOR_ID[vid][pid]
+                                except KeyError:
+                                    # Vendor vid does not have product pid, pid
+                                    # exists for some other vendor in this
+                                    # device
+                                    continue
+                            else:
+                                cbcd = self.BCD
+                            if self.test_bcd(bcd, cbcd):
+                                if self.can_handle(dev, debug=debug):
+                                    return True, dev
+
+        return False, None
+
+    def is_usb_connected_windows(self, devices_on_system, debug=False, only_presence=False):
+        '''
+        Called from is_usb_connected()
+        Windows-specific implementation
+        See comments in is_usb_connected()
+        '''
+
+        def id_iterator():
+            if hasattr(self.VENDOR_ID, 'keys'):
+                for vid in self.VENDOR_ID:
+                    vend = self.VENDOR_ID[vid]
+                    for pid in vend:
+                        bcd = vend[pid]
+                        yield vid, pid, bcd
+            else:
+                vendors = self.VENDOR_ID if hasattr(self.VENDOR_ID, '__len__') else [self.VENDOR_ID]
+                products = self.PRODUCT_ID if hasattr(self.PRODUCT_ID, '__len__') else [self.PRODUCT_ID]
+                for vid in vendors:
+                    for pid in products:
+                        yield vid, pid, self.BCD
+
+        # >>> Entry point
+        #self._log_location(self.ios_connection)
+
+        # If we were ejected, test to see if we're still physically connected
+        # dev:  u'usb\\vid_05ac&pid_12ab&rev_0250'
+        if self.ejected:
+            _vid = "%04x" % self.vid
+            _pid = "%04x" % self.pid
+            for dev in devices_on_system:
+                if re.search('.*vid_%s&pid_%s.*' % (_vid, _pid), dev):
+                    self._log_location("iDevice physically connected, but ejected")
+                    break
+            else:
+                self._log_location("iDevice physically disconnected, resetting ios_connection")
+                self._reset_ios_connection()
+                self.ejected = False
+            return False, None
+
+        # When iDevice disconnects, this throws an error, so exit cleanly
+        try:
+            for vendor_id, product_id, bcd in id_iterator():
+                vid, pid = 'vid_%4.4x'%vendor_id, 'pid_%4.4x'%product_id
+                vidd, pidd = 'vid_%i'%vendor_id, 'pid_%i'%product_id
+                for device_id in devices_on_system:
+                    if (vid in device_id or vidd in device_id) and \
+                       (pid in device_id or pidd in device_id) and \
+                       self.test_bcd_windows(device_id, bcd):
+                            if False and self.verbose:
+                                self._log("self.print_usb_device_info():")
+                                self.print_usb_device_info(device_id)
+                            if only_presence or self.can_handle_windows(device_id, debug=debug):
+                                try:
+                                    bcd = int(device_id.rpartition(
+                                                'rev_')[-1].replace(':', 'a'), 16)
+                                except:
+                                    bcd = None
+                                goodreader_connected = self.can_handle((vendor_id, product_id, bcd, None, None, None))
+                                if goodreader_connected:
+                                    return True, (vendor_id, product_id, bcd, None, None, None)
+        except:
+            pass
+
+        return False, None
 
     def prepare_addable_books(self, paths):
         '''
@@ -704,10 +842,6 @@ if True:
         this_book.title_sort = title_sort(mi.title)
         this_book.uuid = None
 
-        if False:
-            self._log("%s" % repr(this_book.path))
-            self._log(" %s" % repr(this_book.authors))
-            self._log(" %s" % repr(this_book.dateadded))
         return this_book
 
     def _localize_database_path(self, remote_db_path):
