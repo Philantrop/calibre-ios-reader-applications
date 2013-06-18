@@ -111,7 +111,7 @@ class BookList(CollectionsBookList):
     def __init__(self, parent):
         self.parent = parent
         self.verbose = parent.verbose
-        self._log_location()
+        #self._log_location()
 
     def supports_collections(self):
         ''' Return True if the the device supports collections for this book list. '''

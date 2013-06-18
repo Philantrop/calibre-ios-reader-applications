@@ -5,19 +5,13 @@ from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
 import base64, cStringIO, json, os, sqlite3, time
-# import base64, copy, cStringIO, hashlib, os, re, sqlite3, time
 from datetime import datetime
-# from lxml import etree, html
-#
-#
+
 from calibre.constants import islinux, isosx, iswindows
-# from calibre.devices.errors import UserFeedback
-# from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
-# from calibre.utils.config import prefs
-# from calibre.utils.icu import sort_key
+from calibre.devices.usbms.books import BookList
 from calibre.utils.zipfile import ZipFile
 
-from calibre_plugins.ios_reader_apps import Book, BookList, iOSReaderApp
+from calibre_plugins.ios_reader_apps import Book, iOSReaderApp
 
 if True:
     '''
@@ -37,14 +31,14 @@ if True:
         # None indicates that the driver supports backloading from device to library
         self.BACKLOADING_ERROR_MESSAGE = None
 
-        self.CAN_DO_DEVICE_DB_PLUGBOARD = True
-
-        # Which metadata on books can be set via the GUI.
-        self.CAN_SET_METADATA = []
+        # Plugboards
+        self.CAN_DO_DEVICE_DB_PLUGBOARD = False
         self.DEVICE_PLUGBOARD_NAME = 'GOODREADER'
 
-        # ~~~~~~~~~ Variables ~~~~~~~~~
+        # Which metadata on books can be set via the GUI.
+        self.CAN_SET_METADATA = ['title', 'authors']
 
+        # ~~~~~~~~~ Variables ~~~~~~~~~
         self.busy = False
         self.ios_connection = {
             'app_installed': False,
@@ -53,7 +47,7 @@ if True:
             'ejected': False,
             'udid': 0
             }
-        self.path_template = '{0} - {1}.pdf'
+        self.path_template = '{0}.pdf'
         self.local_metadata = None
         self.remote_metadata = '/Library/calibre_metadata.sqlite'
 
@@ -69,6 +63,12 @@ if True:
                                 L{books}(oncard='cardb')).
         '''
         self._log_location()
+        for new_book in locations[0]:
+            self._log("adding %s to booklists[0]" % new_book)
+            booklists[0].append(new_book)
+        if False:
+            for book in booklists[0]:
+                self._log(" '%s' by %s %s" % (book.title, book.authors, book.path))
 
     def books(self, oncard=None, end_session=True):
         '''
@@ -80,15 +80,15 @@ if True:
         @return: A BookList.
 
         '''
-        from calibre import strftime
+        from calibre.ebooks.metadata import authors_to_string
 
         # Entry point
-        booklist = BookList(self)
+        booklist = BookList(oncard, None, None)
         if not oncard:
             self._log_location()
             cached_books = {}
 
-            # Get a local copy of calibre_metadata.db
+            # Get a local copy of metadata db. If it doesn't exist on device, create it
             db_profile = self._localize_database_path(self.remote_metadata)
             self.local_metadata = db_profile['path']
             con = sqlite3.connect(self.local_metadata)
@@ -101,8 +101,6 @@ if True:
                             ''')
                 rows = cur.fetchall()
                 cached_books = [row[b'filename'] for row in rows]
-                self._log("cached_books from %s: %s" % (self.remote_metadata,
-                                                        repr(cached_books)))
 
                 # Fetch installed books from /Documents
                 installed_books = self.ios.listdir(b'/Documents')
@@ -112,7 +110,7 @@ if True:
                         this_book = self._get_cached_metadata(cur, book)
                         booklist.add_book(this_book, False)
                     else:
-                        # Make a local copy, get the stats
+                        # Make a local copy of the book, get the stats
                         pdf_stats = self._localize_pdf('/'.join(['/Documents', book]))
                         this_book = self._get_metadata(book, pdf_stats)
                         booklist.add_book(this_book, False)
@@ -127,20 +125,34 @@ if True:
                                           size,
                                           thumb_data,
                                           title,
-                                          title_sort)
-                                        VALUES(?, ?, ?, ?, ?, ?, ?, ?)''',
-                                        (', '.join(this_book.authors),
+                                          title_sort,
+                                          uuid)
+                                        VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                                        (' & '.join(this_book.authors),
                                          this_book.author_sort,
                                          this_book.dateadded,
                                          this_book.path,
                                          this_book.size,
                                          this_book.thumb_data,
                                          this_book.title,
-                                         this_book.title_sort)
+                                         this_book.title_sort,
+                                         this_book.uuid)
                                         )
                     if self.report_progress is not None:
                         self.report_progress(float((i + 1)*100 / len(installed_books))/100,
                             '%(num)d of %(tot)d' % dict(num=i + 1, tot=len(installed_books)))
+
+                # Remove orphans (books no longer in GoodReader) from db
+                s = set(installed_books)
+                orphans = [x for x in cached_books if x not in s]
+
+                if orphans:
+                    for book in orphans:
+                        # Remove from db, update device copy
+                        self._log("Removing orphan %s from metadata" % json.dumps(book))
+                        cur.execute('''DELETE FROM metadata
+                                       WHERE filename = {0}
+                                    '''.format(json.dumps(book)))
 
                 cur.close()
                 con.commit()
@@ -332,6 +344,23 @@ if True:
             ios_path = '/'.join(['/Documents', path])
             self.ios.remove(ios_path)
 
+        # Update the db
+        con = sqlite3.connect(self.local_metadata)
+        with con:
+            for book in paths:
+                # Remove from db, update device copy
+                self._log("Removing %s from local_metadata" % json.dumps(book))
+                with con:
+                    con.row_factory = sqlite3.Row
+                    cur = con.cursor()
+                    cur.execute('''DELETE FROM metadata
+                                   WHERE filename = {0}
+                                '''.format(json.dumps(book)))
+            con.commit()
+
+        # Copy the updated db to the iDevice
+        self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
+
     def eject(self):
         '''
         Unmount/eject the device
@@ -343,6 +372,51 @@ if True:
         while self.busy:
             time.sleep(0.10)
         self.ejected = True
+
+    def get_file(self, path, outfile, end_session=True):
+        '''
+        Read the file at path on the device and write it to provided outfile.
+
+        outfile: file object (result of an open() call)
+        '''
+        self._log_location()
+        self.ios.copy_from_idevice('/'.join(['/Documents', path]), outfile)
+
+    def prepare_addable_books(self, paths):
+        '''
+        Given a list of paths, returns another list of paths. These paths
+        point to addable versions of the books.
+
+        If there is an error preparing a book, then instead of a path, the
+        position in the returned list for that book should be a three tuple:
+        (original_path, the exception instance, traceback)
+        Modeled on calibre.devices.mtp.driver:prepare_addable_books() #304
+        '''
+        from calibre.ptempfile import PersistentTemporaryDirectory
+        from calibre.utils.filenames import shorten_components_to
+
+        self._log_location()
+        tdir = PersistentTemporaryDirectory('_prepare_goodreader')
+        ans = []
+        for path in paths:
+            if not self.ios.exists('/'.join(['/Documents', path])):
+                ans.append((path, 'File not found', 'File not found'))
+                continue
+
+            base = tdir
+            if iswindows:
+                plen = len(base)
+                name = ''.join(shorten_components_to(245-plen, [path]))
+            with open(os.path.join(base, path), 'wb') as out:
+                try:
+                    self.get_file(path, out)
+                except Exception as e:
+                    import traceback
+                    ans.append((path, e, traceback.format_exc()))
+                else:
+                    ans.append(out.name)
+
+        return ans
 
     def remove_books_from_metadata(self, paths, booklists):
         '''
@@ -374,46 +448,45 @@ if True:
         manage_device_metadata=='on_connect', otherwise booklist metadata comes from
         device
         '''
+        from calibre.ebooks.metadata import authors_to_string
+
         self._log_location()
 
         for booklist in booklists:
             if not booklist:
                 continue
 
-            current_books = [book.path for book in booklist]
-            self._log("current_books: %s" % current_books)
-
+            # Update db title/author from booklist title/author
             con = sqlite3.connect(self.local_metadata)
             with con:
                 con.row_factory = sqlite3.Row
                 cur = con.cursor()
-                cur.execute('''SELECT
-                                filename
-                               FROM metadata
-                            ''')
-                rows = cur.fetchall()
-                db_books = [row[b'filename'] for row in rows]
-                self._log("db_books: %s" % db_books)
+                for book in booklist:
+                    cur.execute('''SELECT
+                                    authors,
+                                    filename,
+                                    title
+                                   FROM metadata
+                                   WHERE filename = {}
+                                '''.format(json.dumps(book.path)))
+                    cached_book = cur.fetchall()[0]
+                    if (book.title != cached_book[b'title'] or
+                        book.authors != [cached_book[b'authors']]):
+                        self._log("%s: metadata has been updated" % book.path)
+                        self._log("booklist: %s %s" % (book.title, book.authors))
+                        self._log("database: %s %s" % (cached_book[b'title'], [cached_book[b'authors']]))
 
-            # Remove books not in current_books from db
-            s = set(current_books)
-            books_to_delete = [x for x in db_books if x not in s]
-
-            if books_to_delete:
-                con = sqlite3.connect(self.local_metadata)
-                for book in books_to_delete:
-                    # Remove from db, update device copy
-                    self._log("Removing %s from local_metadata" % json.dumps(book))
-                    with con:
-                        con.row_factory = sqlite3.Row
-                        cur = con.cursor()
-                        cur.execute('''DELETE FROM metadata
-                                       WHERE filename = {0}
-                                    '''.format(json.dumps(book)))
+                        cur.execute('''UPDATE metadata
+                                       SET authors = {0},
+                                           title = {1}
+                                       WHERE filename = {2}
+                                    '''.format(json.dumps(' & '.join(book.authors)),
+                                               json.dumps(book.title),
+                                               json.dumps(book.path)))
                 con.commit()
 
-                # Copy the updated db to the iDevice
-                self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
+            # Copy the updated db to the iDevice
+            self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
 
     def upload_books(self, files, names, on_card=None, end_session=True, metadata=None):
         '''
@@ -446,9 +519,7 @@ if True:
                 thumb = self._cover_to_thumb(metadata[i])
                 this_book = self._create_new_book(fpath, metadata[i], thumb)
                 new_booklist.append(this_book)
-                fs = self.path_template.format(metadata[i].title,
-                                                        ', '.join(metadata[i].authors))
-                destination = '/'.join(['/Documents', fs])
+                destination = '/'.join(['/Documents', self.path_template.format(metadata[i].title)])
                 self.ios.copy_to_idevice(str(fpath), destination)
 
                 # Add to calibre_metadata db
@@ -461,16 +532,18 @@ if True:
                                   size,
                                   thumb_data,
                                   title,
-                                  title_sort)
-                                VALUES(?, ?, ?, ?, ?, ?, ?, ?)''',
-                                (', '.join(this_book.authors),
+                                  title_sort,
+                                  uuid)
+                                VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''',
+                                (' & '.join(this_book.authors),
                                  this_book.author_sort,
-                                 this_book.datetime,
+                                 this_book.dateadded,
                                  this_book.path,
                                  this_book.size,
                                  this_book.thumb_data,
                                  this_book.title,
-                                 this_book.title_sort)
+                                 this_book.title_sort,
+                                 this_book.uuid)
                                 )
                 if self.report_progress is not None:
                     self.report_progress(float((i + 1)*100 / len(files))/100,
@@ -544,16 +617,23 @@ if True:
         from calibre.ebooks.metadata import authors_to_string
 
         self._log_location(metadata.title)
-        this_book = Book(metadata.title, authors_to_string(metadata.authors))
+        this_book = Book(metadata.title, ' & '.join(metadata.authors))
         this_book.author_sort = metadata.author_sort
-        this_book.datetime = time.mktime(time.gmtime())
-        this_book.path = os.path.basename(fpath)
-        this_book.size = metadata.size
+        this_book.dateadded = time.mktime(time.gmtime())
+        this_book.datetime = datetime.fromtimestamp(this_book.dateadded).timetuple()
+        this_book.path = self.path_template.format(metadata.title)
+        this_book.size = os.path.getsize(fpath)
         this_book.thumbnail = self._cover_to_thumb(metadata)
         this_book.thumb_data = base64.b64encode(this_book.thumbnail)
         this_book.title_sort = metadata.title_sort
-        return this_book
+        this_book.uuid = metadata.uuid
 
+        if False:
+            self._log("%s by %s" % (this_book.title, ' & '.join(this_book.authors)))
+            self._log("path: %s" % this_book.path)
+            self._log("author_sort: %s" % this_book.author_sort)
+            self._log("title_sort: %s" % this_book.title_sort)
+        return this_book
 
     def _get_cached_metadata(self, cur, book):
         '''
@@ -570,7 +650,8 @@ if True:
                          size,
                          thumb_data,
                          title,
-                         title_sort
+                         title_sort,
+                         uuid
                         FROM metadata
                         WHERE filename = {0}
                     '''.format(json.dumps(book)))
@@ -584,28 +665,30 @@ if True:
         this_book.size = cached_book[b'size']
         this_book.thumbnail = base64.b64decode(cached_book[b'thumb_data'])
         this_book.title_sort = cached_book[b'title_sort']
+        this_book.uuid = cached_book[b'uuid']
         return this_book
 
     def _get_metadata(self, book, pdf_stats):
         '''
         Return a populated Book object with available metadata
         '''
-        from calibre.ebooks.metadata import authors_to_string
+        from calibre.ebooks.metadata import author_to_author_sort, authors_to_string, title_sort
         from calibre.ebooks.metadata.pdf import get_metadata
         self._log_location(book)
 
         with open(os.path.join(self.temp_dir, pdf_stats['path']), 'rb') as f:
             stream = cStringIO.StringIO(f.read())
             mi = get_metadata(stream)
-        this_book = Book(mi.title, authors_to_string(mi.authors))
-        this_book.author_sort = ', '.join(mi.authors)
+        this_book = Book(mi.title, ' & '.join(mi.authors))
+        this_book.author_sort = author_to_author_sort(mi.authors)
         this_book.datetime = datetime.fromtimestamp(int(pdf_stats['stats']['st_birthtime'])).timetuple()
         this_book.dateadded = int(pdf_stats['stats']['st_birthtime'])
         this_book.path = book
         this_book.size = int(pdf_stats['stats']['st_size'])
         this_book.thumbnail = self._cover_to_thumb(mi)
         this_book.thumb_data = base64.b64encode(this_book.thumbnail)
-        this_book.title_sort = mi.title
+        this_book.title_sort = title_sort(mi.title)
+        this_book.uuid = None
 
         if False:
             self._log("%s" % repr(this_book.path))
@@ -662,7 +745,8 @@ if True:
                                     size INTEGER,
                                     thumb_data BLOB,
                                     title TEXT,
-                                    title_sort TEXT
+                                    title_sort TEXT,
+                                    uuid TEXT
                                     );
                                 ''')
             conn.commit()
