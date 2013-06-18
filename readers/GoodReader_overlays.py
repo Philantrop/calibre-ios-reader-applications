@@ -104,7 +104,9 @@ if True:
 
                 # Fetch installed books from /Documents. GoodReader allows folder nesting
                 # We can only show flat listing in Device view
-                installed_books = self.ios.listdir(b'/Documents')
+                #installed_books = self.ios.listdir(b'/Documents')
+                installed_books = self._get_nested_folder_contents(b'/Documents')
+
                 for i, book in enumerate(installed_books):
                     if book in cached_books:
                         # Retrieve the cached metadata
@@ -112,12 +114,18 @@ if True:
                         booklist.add_book(this_book, False)
                     else:
                         # Make a local copy of the book, get the stats
-                        pdf_stats = self._localize_pdf('/'.join(['/Documents', book]))
+                        remote_path = '/'.join(['/Documents', book])
+                        stats = self.ios.stat(remote_path)
+                        local_path = self._localize_pdf('/'.join(['/Documents', book]))
+                        pdf_stats = {'path': local_path, 'stats': stats}
                         try:
                             this_book = self._get_metadata(book, pdf_stats)
+                            os.remove(local_path)
                         except:
                             self._log("ERROR reading metadata from %s" % book)
+                            os.remove(local_path)
                             continue
+
                         booklist.add_book(this_book, False)
                         cached_books.append(book)
                         # Add to calibre_metadata db
@@ -340,7 +348,8 @@ if True:
         Delete books at paths on device.
         '''
         self._log_location()
-        self._log("cached_books: %s" % self.cached_books)
+        if self.prefs.get('developer_mode', False):
+            self._log("cached_books: %s" % self.cached_books)
 
         file_count = float(len(paths))
 
@@ -844,6 +853,30 @@ if True:
 
         return this_book
 
+    def _get_nested_folder_contents(self, top_folder):
+        '''
+        Walk the contents of /Documents iteratively to get all nested files
+        '''
+        def _get_nested_files(folder, stats, file_list):
+            files = self.ios.listdir('/'.join([top_folder, folder]))
+            for f in files:
+                if files[f]['st_ifmt'] == 'S_IFREG':
+                    file_list.append('/'.join([folder, f]))
+                elif files[f]['st_ifmt'] == 'S_IFDIR':
+                    file_list = _get_nested_files(f, files[f], file_list)
+            return file_list
+
+        self._log_location(top_folder)
+
+        file_list = []
+        files = self.ios.listdir(top_folder)
+        for f in files:
+            if files[f]['st_ifmt'] == 'S_IFREG':
+                file_list.append(f)
+            elif files[f]['st_ifmt'] == 'S_IFDIR':
+                file_list = _get_nested_files(f, files[f], file_list)
+        return file_list
+
     def _localize_database_path(self, remote_db_path):
         '''
         Copy remote_db_path from iOS to local storage as needed
@@ -909,30 +942,23 @@ if True:
         self._log_location("remote_path: '%s'" % (remote_path))
 
         local_path = None
-        pdf_stats = {}
+        path = remote_path.split('/')[-1]
+        if iswindows:
+            from calibre.utils.filenames import shorten_components_to
+            plen = len(self.temp_dir)
+            path = ''.join(shorten_components_to(245-plen, [path]))
 
-        pdf_stats = self.ios.stat(remote_path)
-        if pdf_stats:
-            path = remote_path.split('/')[-1]
-            if iswindows:
-                from calibre.utils.filenames import shorten_components_to
-                plen = len(self.temp_dir)
-                path = ''.join(shorten_components_to(245-plen, [path]))
+        full_path = os.path.join(self.temp_dir, path)
+        if os.path.exists(full_path):
+            lfs = os.stat(full_path)
+            if (int(pdf_stats['st_mtime']) == lfs.st_mtime and
+                int(pdf_stats['st_size']) == lfs.st_size):
+                local_db_path = full_path
 
-            full_path = os.path.join(self.temp_dir, path)
-            if os.path.exists(full_path):
-                lfs = os.stat(full_path)
-                if (int(pdf_stats['st_mtime']) == lfs.st_mtime and
-                    int(pdf_stats['st_size']) == lfs.st_size):
-                    local_db_path = full_path
+        if not local_path:
+            with open(full_path, 'wb') as out:
+                self.ios.copy_from_idevice(remote_path, out)
+            local_path = out.name
 
-            if not local_path:
-                with open(full_path, 'wb') as out:
-                    self.ios.copy_from_idevice(remote_path, out)
-                local_path = out.name
-        else:
-            self._log_location("'%s' not found" % remote_path)
-            raise DatabaseNotFoundException
-
-        return {'path': local_path, 'stats': pdf_stats}
+        return local_path
 
