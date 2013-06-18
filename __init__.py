@@ -55,7 +55,7 @@ plugin_prefs = JSONConfig('plugins/iOS reader applications')
 # 'iBooks' is removed under linux
 READER_APP_ALIASES = {
                       'iBooks':     [b'com.apple.iBooks'],
-                      'GoodReader': [b'com.goodiware.GoodReaderIPad'],
+#                      'GoodReader': [b'com.goodiware.GoodReaderIPad'],
                       'Marvin':     [b'com.appstafarian.Marvin', b'com.appstafarian.MarvinIP']
                      }
 
@@ -63,12 +63,12 @@ READER_APP_ALIASES = {
 # but included for clarity.
 READER_APP_FORMATS = {
                       'iBooks':     ['epub', 'pdf'],
-                      'GoodReader': ['pdf'],
+#                      'GoodReader': ['pdf'],
                       'Marvin':     ['epub']
                      }
 
 READER_APP_ICONS = [
-    'images/GoodReader.png',
+#    'images/GoodReader.png',
     'images/iBooks.png',
     'images/Marvin.png',
     ]
