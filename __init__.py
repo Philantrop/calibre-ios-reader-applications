@@ -50,6 +50,21 @@ else:
 
 plugin_prefs = JSONConfig('plugins/iOS reader applications')
 
+# List of app names as installed by iOS. Prefix with 'b' for libiMobileDevice
+READER_APP_ALIASES = {
+                      'iBooks':     [b'com.apple.iBooks'],
+                      'GoodReader': [b'com.goodiware.GoodReaderIPad'],
+                      'Marvin':     [b'com.appstafarian.Marvin', b'com.appstafarian.MarvinIP']
+                     }
+
+# Supported formats. Not required for iBooks, as the ITUNES class handles formats,
+# included for clarity.
+READER_APP_FORMATS = {
+                      'iBooks':     ['epub', 'pdf'],
+                      'GoodReader': ['pdf'],
+                      'Marvin':     ['epub']
+                     }
+
 READER_APP_ICONS = [
     'images/BluefireReader.png',
     'images/GoodReader.png',
@@ -96,7 +111,7 @@ class BookList(CollectionsBookList):
     def __init__(self, parent):
         self.parent = parent
         self.verbose = parent.verbose
-        self._log_location()
+        #self._log_location()
 
     def supports_collections(self):
         ''' Return True if the the device supports collections for this book list. '''
@@ -316,8 +331,8 @@ class CompileUI():
 
 class DriverBase(DeviceConfig, DevicePlugin):
 
-    # Supported formats
-    FORMATS = ['epub']
+    # Specified at runtime in settings()
+    FORMATS = []
 
     def config_widget(self):
         '''
@@ -325,9 +340,9 @@ class DriverBase(DeviceConfig, DevicePlugin):
         '''
         self._log_location()
         from calibre_plugins.ios_reader_apps.config import ConfigWidget
-        applist = ['iBooks', 'Marvin']
-        if islinux:
-            applist = ['Marvin']
+        applist = ['GoodReader', 'Marvin']
+        if not islinux:
+            applist += ['iBooks']
         self.cw = ConfigWidget(self, applist)
         return self.cw
 
@@ -389,8 +404,6 @@ class iOSReaderApp(DriverBase):
         free_space()
     '''
 
-    app_aliases = {'iBooks': [b'com.apple.iBooks'],
-                   'Marvin': [b'com.appstafarian.Marvin', b'com.appstafarian.MarvinIP']}
     app_id = None
     author = 'GRiker'
     books_subpath = None
@@ -784,6 +797,16 @@ class iOSReaderApp(DriverBase):
         self._log_location()
         self.report_progress = report_progress
 
+    def settings(self):
+        '''
+        Dynamically assert supported formats
+        '''
+        self._log_location()
+        opts = super(iOSReaderApp, self).settings()
+        opts.format_map = READER_APP_FORMATS[self.ios_reader_app]
+        self._log("format_map for '%s': %s" % (self.ios_reader_app, opts.format_map))
+        return opts
+
     def startup(self):
         self._log_location()
 
@@ -908,19 +931,19 @@ class iOSReaderApp(DriverBase):
         '''
         If we have a connected device, store a device profile
         ios.installed_apps: {<appname>: {'app_version': '1.2.3', 'app_id': 'com.apple.iBooks'}}
-        Return a valid app_id
+        Return the app_id
         If more than one alias available, refer to JSON file for preferred alias
         '''
         self._log_location()
         device_list = self.ios.get_device_list()
         if device_list is None:
             raise libiMobileDeviceException("Unable to communicate with libiMobileDevice")
-        app_id = None
+        self.preferred_app_id = None
         try:
-            preferred_app = None
             if len(device_list):
                 if len(device_list) == 1:
                     self.ios.connect_idevice()
+                    #self.ios.get_installed_apps(READER_APP_ALIASES[self.ios_reader_app])
                     preferences = self.ios.get_preferences()
                     self.ios.disconnect_idevice()
 
@@ -932,7 +955,7 @@ class iOSReaderApp(DriverBase):
                     self.device_profile = dict(preferences.items() + device_info.items())
 
                     # Find the first installed app (iPad version takes precedence)
-                    for _app_id in self.app_aliases[self.ios_reader_app]:
+                    for _app_id in READER_APP_ALIASES[self.ios_reader_app]:
                         self._log("mounting '%s'" % _app_id)
                         if self.ios.mount_ios_app(app_id=_app_id):
                             app_id = _app_id
@@ -949,7 +972,7 @@ class iOSReaderApp(DriverBase):
             traceback.print_exc()
             exc_type, exc_value, exc_traceback = sys.exc_info()
             self._log(traceback.format_exception_only(exc_type, exc_value)[0].strip())
-        return app_id
+        return self.preferred_app_id
 
     def _init_prefs(self):
         '''
