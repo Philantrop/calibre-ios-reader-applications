@@ -1190,7 +1190,7 @@ if True:
                 self._remove_existing_copy(path, metadata[i])
 
             # Populate Book object for new_booklist
-            this_book = self._create_new_book(fpath, metadata[i], mi_x, thumb)
+            this_book = self._create_new_book(fpath, metadata[i], mi_x, thumb, metadata_only)
 
             if not metadata_only:
                 # Create <book> for manifest with filename=, coverhash=
@@ -1301,7 +1301,7 @@ if True:
             self._log("ERROR: no cover available for '%s'" % metadata.title)
         return thumb
 
-    def _create_new_book(self, fpath, metadata, metadata_x, thumb):
+    def _create_new_book(self, fpath, metadata, metadata_x, thumb, metadata_only):
         '''
         Need original metadata for id, uuid
         Need metadata_x for transformed title, author
@@ -1327,6 +1327,8 @@ if True:
         #this_book.cid = metadata.id
         this_book.description = metadata_x.comments
         this_book.device_collections = self._get_field_items(metadata)
+        if not metadata_only:
+            this_book.device_collections.append('NEW')
         if this_book.uuid in self.active_flags:
             this_book.device_collections = sorted(self.active_flags[this_book.uuid] +
                                                   this_book.device_collections,
