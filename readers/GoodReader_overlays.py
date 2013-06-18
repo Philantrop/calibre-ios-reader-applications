@@ -448,7 +448,7 @@ if True:
         manage_device_metadata=='on_connect', otherwise booklist metadata comes from
         device
         '''
-        from calibre.ebooks.metadata import authors_to_string
+        from calibre.ebooks.metadata import author_to_author_sort, authors_to_string, title_sort
 
         self._log_location()
 
@@ -472,16 +472,20 @@ if True:
                     cached_book = cur.fetchall()[0]
                     if (book.title != cached_book[b'title'] or
                         book.authors != [cached_book[b'authors']]):
-                        self._log("%s: metadata has been updated" % book.path)
-                        self._log("booklist: %s %s" % (book.title, book.authors))
-                        self._log("database: %s %s" % (cached_book[b'title'], [cached_book[b'authors']]))
+                        self._log("updating metadata for %s" % repr(book.path))
+                        #self._log("booklist: %s %s" % (book.title, book.authors))
+                        #self._log("database: %s %s" % (cached_book[b'title'], [cached_book[b'authors']]))
 
                         cur.execute('''UPDATE metadata
                                        SET authors = {0},
-                                           title = {1}
-                                       WHERE filename = {2}
+                                           author_sort = {1},
+                                           title = {2},
+                                           title_sort = {3}
+                                       WHERE filename = {4}
                                     '''.format(json.dumps(' & '.join(book.authors)),
+                                               json.dumps(author_to_author_sort(book.authors[0])),
                                                json.dumps(book.title),
+                                               json.dumps(title_sort(book.title)),
                                                json.dumps(book.path)))
                 con.commit()
 
@@ -680,7 +684,7 @@ if True:
             stream = cStringIO.StringIO(f.read())
             mi = get_metadata(stream)
         this_book = Book(mi.title, ' & '.join(mi.authors))
-        this_book.author_sort = author_to_author_sort(mi.authors)
+        this_book.author_sort = author_to_author_sort(mi.authors[0])
         this_book.datetime = datetime.fromtimestamp(int(pdf_stats['stats']['st_birthtime'])).timetuple()
         this_book.dateadded = int(pdf_stats['stats']['st_birthtime'])
         this_book.path = book
