@@ -1540,9 +1540,8 @@ if True:
                               app_installed=False,
                               device_name=None,
                               ejected=False,
-                              udid=0,
-                              verbose=True):
-        if verbose:
+                              udid=0):
+        if self.prefs.get('developer_mode', False):
             connection_state = ("connected:{0:1} app_installed:{1:1} device_name:{2} udid:{3}".format(
                 self.ios_connection['connected'],
                 self.ios_connection['app_installed'],

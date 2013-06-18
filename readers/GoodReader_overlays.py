@@ -40,6 +40,7 @@ if True:
 
         # ~~~~~~~~~ Variables ~~~~~~~~~
         self.busy = False
+        self.documents_folder = b'/Documents'
         self.ios_connection = {
             'app_installed': False,
             'connected': False,
@@ -50,6 +51,7 @@ if True:
         self.path_template = '{0}.pdf'
         self.local_metadata = None
         self.remote_metadata = '/Library/calibre_metadata.sqlite'
+
 
     def add_books_to_metadata(self, locations, metadata, booklists):
         '''
@@ -102,10 +104,8 @@ if True:
                 rows = cur.fetchall()
                 cached_books = [row[b'filename'] for row in rows]
 
-                # Fetch installed books from /Documents. GoodReader allows folder nesting
-                # We can only show flat listing in Device view
-                #installed_books = self.ios.listdir(b'/Documents')
-                installed_books = self._get_nested_folder_contents(b'/Documents')
+                # Fetch installed books from documents folder
+                installed_books = self._get_nested_folder_contents(self.documents_folder)
 
                 for i, book in enumerate(installed_books):
                     if book in cached_books:
@@ -114,9 +114,9 @@ if True:
                         booklist.add_book(this_book, False)
                     else:
                         # Make a local copy of the book, get the stats
-                        remote_path = '/'.join(['/Documents', book])
+                        remote_path = '/'.join([self.documents_folder, book])
                         stats = self.ios.stat(remote_path)
-                        local_path = self._localize_pdf('/'.join(['/Documents', book]))
+                        local_path = self._localize_pdf('/'.join([self.documents_folder, book]))
                         pdf_stats = {'path': local_path, 'stats': stats}
                         try:
                             this_book = self._get_metadata(book, pdf_stats)
@@ -355,7 +355,7 @@ if True:
 
         for i, path in enumerate(paths):
             self._log("removing %s" % repr(path))
-            ios_path = '/'.join(['/Documents', path])
+            ios_path = '/'.join([self.documents_folder, path])
             self.ios.remove(ios_path)
 
         # Update the db
@@ -394,7 +394,7 @@ if True:
         outfile: file object (result of an open() call)
         '''
         self._log_location()
-        self.ios.copy_from_idevice('/'.join(['/Documents', path]), outfile)
+        self.ios.copy_from_idevice('/'.join([self.documents_folder, path]), outfile)
 
     def is_usb_connected(self, devices_on_system, debug=False, only_presence=False):
         '''
@@ -546,7 +546,7 @@ if True:
         tdir = PersistentTemporaryDirectory('_prepare_goodreader')
         ans = []
         for path in paths:
-            if not self.ios.exists('/'.join(['/Documents', path])):
+            if not self.ios.exists('/'.join([self.documents_folder, path])):
                 ans.append((path, 'File not found', 'File not found'))
                 continue
 
@@ -671,7 +671,7 @@ if True:
                 thumb = self._cover_to_thumb(metadata[i])
                 this_book = self._create_new_book(fpath, metadata[i], thumb)
                 new_booklist.append(this_book)
-                destination = '/'.join(['/Documents', self.path_template.format(metadata[i].title)])
+                destination = '/'.join([self.documents_folder, self.path_template.format(metadata[i].title)])
                 self.ios.copy_to_idevice(str(fpath), destination)
 
                 # Add to calibre_metadata db
@@ -855,7 +855,7 @@ if True:
 
     def _get_nested_folder_contents(self, top_folder):
         '''
-        Walk the contents of /Documents iteratively to get all nested files
+        Walk the contents of documents folder iteratively to get all nested files
         '''
         def _get_nested_files(folder, stats, file_list):
             files = self.ios.listdir('/'.join([top_folder, folder]))
@@ -961,4 +961,25 @@ if True:
             local_path = out.name
 
         return local_path
+
+    def _reset_ios_connection(self,
+                              app_installed=False,
+                              device_name=None,
+                              ejected=False,
+                              udid=0):
+        if self.prefs.get('developer_mode', False):
+            connection_state = ("connected:{0:1} app_installed:{1:1} device_name:{2} udid:{3}".format(
+                self.ios_connection['connected'],
+                self.ios_connection['app_installed'],
+                self.ios_connection['device_name'],
+                self.ios_connection['udid'])
+                )
+
+            self._log_location(connection_state)
+
+        self.ios_connection['app_installed'] = app_installed
+        self.ios_connection['connected'] = False
+        self.ios_connection['device_name'] = device_name
+        self.ios_connection['udid'] = udid
+
 
