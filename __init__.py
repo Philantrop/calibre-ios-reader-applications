@@ -408,6 +408,7 @@ class iOSReaderApp(DriverBase):
     description = 'Communicate with Apple iOS reader applications'
     device_profile = None
     ejected = None
+    format_map = []
     gui_name = 'iOS reader applications'
     icon = None
     minimum_calibre_version = (0, 9, 34)
@@ -812,7 +813,10 @@ class iOSReaderApp(DriverBase):
         '''
         self._log_location()
         opts = super(iOSReaderApp, self).settings()
-        opts.format_map = READER_APP_FORMATS[self.ios_reader_app]
+        if self.ios_reader_app == "development_mode":
+            opts.format_map = self.format_map
+        else:
+            opts.format_map = READER_APP_FORMATS[self.ios_reader_app]
         self._log("format_map for '%s': %s" % (self.ios_reader_app, opts.format_map))
         return opts
 

@@ -27,7 +27,7 @@ if True:
 
         self._log_location(self.ios_reader_app)
 
-        # ~~~~~~~~~ Constants ~~~~~~~~~
+        # ~~~~~~~~~ Calibre constants ~~~~~~~~~
         # None indicates that the driver supports backloading from device to library
         self.BACKLOADING_ERROR_MESSAGE = None
 
@@ -41,6 +41,7 @@ if True:
         # ~~~~~~~~~ Variables ~~~~~~~~~
         self.busy = False
         self.documents_folder = b'/Documents'
+        self.format_map = ['pdf']
         self.ios_connection = {
             'app_installed': False,
             'connected': False,
@@ -97,22 +98,52 @@ if True:
             with con:
                 con.row_factory = sqlite3.Row
                 cur = con.cursor()
+
+                # Get the last saved set of installed filenames from the db
                 cur.execute('''SELECT
                                 filename
                                FROM metadata
                             ''')
                 rows = cur.fetchall()
                 cached_books = [row[b'filename'] for row in rows]
+                for b in sorted(cached_books):
+                    self._log(b)
 
-                # Fetch installed books from documents folder
+                # Get the currently installed filenames from the documents folder
                 installed_books = self._get_nested_folder_contents(self.documents_folder)
+                for b in sorted(installed_books):
+                    self._log(b)
 
+                moved_books = []
                 for i, book in enumerate(installed_books):
+                    book_moved = False
                     if book in cached_books:
                         # Retrieve the cached metadata
                         this_book = self._get_cached_metadata(cur, book)
                         booklist.add_book(this_book, False)
                     else:
+                        # Check to see if a known book has been moved
+                        for cb in cached_books:
+                            if cb.rpartition('/')[2] == book.rpartition('/')[2]:
+                                # Retrieve the cached metadata with the new location
+                                self._log("%s moved to %s" % (repr(cb), repr(book)))
+                                this_book = self._get_cached_metadata(cur, cb)
+                                this_book.path = book
+                                booklist.add_book(this_book, False)
+                                # Update metadata with new location
+                                cur.execute('''
+                                            UPDATE metadata
+                                            SET filename = {0}
+                                            WHERE filename = {1}
+                                            '''.format(json.dumps(book),
+                                                       json.dumps(cb)))
+                                con.commit()
+                                book_moved = True
+                                moved_books.append(cb)
+                                break
+                        if book_moved:
+                            continue
+
                         # Make a local copy of the book, get the stats
                         remote_path = '/'.join([self.documents_folder, book])
                         stats = self.ios.stat(remote_path)
@@ -156,8 +187,9 @@ if True:
                             '%(num)d of %(tot)d' % dict(num=i + 1, tot=len(installed_books)))
 
                 # Remove orphans (books no longer in GoodReader) from db
-                s = set(installed_books)
-                orphans = [x for x in cached_books if x not in s]
+                ib = set(installed_books)
+                mb = set(moved_books)
+                orphans = [x for x in cached_books if x not in ib and x not in mb]
 
                 if orphans:
                     for book in orphans:
@@ -166,7 +198,6 @@ if True:
                         cur.execute('''DELETE FROM metadata
                                        WHERE filename = {0}
                                     '''.format(json.dumps(book)))
-
                 cur.close()
                 con.commit()
 
