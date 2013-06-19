@@ -72,6 +72,7 @@ if True:
             'read': 'READ',
             'reading_list': 'READING LIST'
             }
+        self.format_map = ['epub']
         self.ios_connection = {
             'app_installed': False,
             'connected': False,

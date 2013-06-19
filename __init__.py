@@ -59,14 +59,6 @@ READER_APP_ALIASES = {
                       'Marvin':     [b'com.appstafarian.Marvin', b'com.appstafarian.MarvinIP']
                      }
 
-# Supported formats. Not required for iBooks, as the ITUNES class handles formats,
-# but included for clarity.
-READER_APP_FORMATS = {
-                      'iBooks':     ['epub', 'pdf'],
-                      'GoodReader': ['pdf'],
-                      'Marvin':     ['epub']
-                     }
-
 READER_APP_ICONS = [
     'images/GoodReader.png',
     'images/iBooks.png',
@@ -809,15 +801,11 @@ class iOSReaderApp(DriverBase):
 
     def settings(self):
         '''
-        Dynamically assert supported formats
+        Dynamically assert supported formats within opts
         '''
-        self._log_location()
         opts = super(iOSReaderApp, self).settings()
-        if self.ios_reader_app == "development_mode":
-            opts.format_map = self.format_map
-        else:
-            opts.format_map = READER_APP_FORMATS[self.ios_reader_app]
-        self._log("format_map for '%s': %s" % (self.ios_reader_app, opts.format_map))
+        opts.format_map = self.format_map
+        self._log_location("format_map for '%s': %s" % (self.ios_reader_app, opts.format_map))
         return opts
 
     def startup(self):

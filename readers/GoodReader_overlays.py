@@ -67,11 +67,7 @@ if True:
         '''
         self._log_location()
         for new_book in locations[0]:
-            self._log("adding %s to booklists[0]" % new_book)
             booklists[0].append(new_book)
-        if False:
-            for book in booklists[0]:
-                self._log(" '%s' by %s %s" % (book.title, book.authors, book.path))
 
     def books(self, oncard=None, end_session=True):
         '''
@@ -202,6 +198,7 @@ if True:
                 con.commit()
 
                 # Copy the updated db to the iDevice
+                self._log("updating remote_metadata")
                 self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
 
             if self.report_progress is not None:
@@ -404,6 +401,7 @@ if True:
             con.commit()
 
         # Copy the updated db to the iDevice
+        self._log("updating remote_metadata")
         self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
 
     def eject(self):
@@ -661,9 +659,6 @@ if True:
                     if (book.title != cached_book[b'title'] or
                         book.authors != [cached_book[b'authors']]):
                         self._log("updating metadata for %s" % repr(book.path))
-                        #self._log("booklist: %s %s" % (book.title, book.authors))
-                        #self._log("database: %s %s" % (cached_book[b'title'], [cached_book[b'authors']]))
-
                         cur.execute('''UPDATE metadata
                                        SET authors = "{0}",
                                            author_sort = "{1}",
@@ -679,6 +674,7 @@ if True:
                 con.commit()
 
             # Copy the updated db to the iDevice
+            self._log("updating remote_metadata")
             self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
 
     def upload_books(self, files, names, on_card=None, end_session=True, metadata=None):
@@ -746,6 +742,7 @@ if True:
             con.commit()
 
         # Copy the updated db to the iDevice
+        self._log("updating remote_metadata")
         self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
 
         if self.report_progress is not None:
