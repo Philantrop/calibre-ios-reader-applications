@@ -27,7 +27,7 @@ if True:
 
         self._log_location(self.ios_reader_app)
 
-        # ~~~~~~~~~ Constants ~~~~~~~~~
+        # ~~~~~~~~~ Calibre constants ~~~~~~~~~
         # None indicates that the driver supports backloading from device to library
         self.BACKLOADING_ERROR_MESSAGE = None
 
@@ -40,6 +40,8 @@ if True:
 
         # ~~~~~~~~~ Variables ~~~~~~~~~
         self.busy = False
+        self.documents_folder = b'/Documents'
+        self.format_map = ['pdf']
         self.ios_connection = {
             'app_installed': False,
             'connected': False,
@@ -50,6 +52,7 @@ if True:
         self.path_template = '{0}.pdf'
         self.local_metadata = None
         self.remote_metadata = '/Library/calibre_metadata.sqlite'
+
 
     def add_books_to_metadata(self, locations, metadata, booklists):
         '''
@@ -64,11 +67,7 @@ if True:
         '''
         self._log_location()
         for new_book in locations[0]:
-            self._log("adding %s to booklists[0]" % new_book)
             booklists[0].append(new_book)
-        if False:
-            for book in booklists[0]:
-                self._log(" '%s' by %s %s" % (book.title, book.authors, book.path))
 
     def books(self, oncard=None, end_session=True):
         '''
@@ -95,29 +94,65 @@ if True:
             with con:
                 con.row_factory = sqlite3.Row
                 cur = con.cursor()
+
+                # Get the last saved set of installed filenames from the db
                 cur.execute('''SELECT
                                 filename
                                FROM metadata
                             ''')
                 rows = cur.fetchall()
                 cached_books = [row[b'filename'] for row in rows]
+                for b in sorted(cached_books):
+                    self._log(b)
 
-                # Fetch installed books from /Documents. GoodReader allows folder nesting
-                # We can only show flat listing in Device view
-                installed_books = self.ios.listdir(b'/Documents')
+                # Get the currently installed filenames from the documents folder
+                installed_books = self._get_nested_folder_contents(self.documents_folder)
+                for b in sorted(installed_books):
+                    self._log(b)
+
+                moved_books = []
                 for i, book in enumerate(installed_books):
+                    book_moved = False
                     if book in cached_books:
                         # Retrieve the cached metadata
                         this_book = self._get_cached_metadata(cur, book)
                         booklist.add_book(this_book, False)
                     else:
+                        # Check to see if a known book has been moved
+                        for cb in cached_books:
+                            if cb.rpartition('/')[2] == book.rpartition('/')[2]:
+                                # Retrieve the cached metadata with the new location
+                                self._log("%s moved to %s" % (repr(cb), repr(book)))
+                                this_book = self._get_cached_metadata(cur, cb)
+                                this_book.path = book
+                                booklist.add_book(this_book, False)
+                                # Update metadata with new location
+                                cur.execute('''
+                                            UPDATE metadata
+                                            SET filename = {0}
+                                            WHERE filename = {1}
+                                            '''.format(json.dumps(book),
+                                                       json.dumps(cb)))
+                                con.commit()
+                                book_moved = True
+                                moved_books.append(cb)
+                                break
+                        if book_moved:
+                            continue
+
                         # Make a local copy of the book, get the stats
-                        pdf_stats = self._localize_pdf('/'.join(['/Documents', book]))
+                        remote_path = '/'.join([self.documents_folder, book])
+                        stats = self.ios.stat(remote_path)
+                        local_path = self._localize_pdf('/'.join([self.documents_folder, book]))
+                        pdf_stats = {'path': local_path, 'stats': stats}
                         try:
                             this_book = self._get_metadata(book, pdf_stats)
+                            os.remove(local_path)
                         except:
                             self._log("ERROR reading metadata from %s" % book)
+                            os.remove(local_path)
                             continue
+
                         booklist.add_book(this_book, False)
                         cached_books.append(book)
                         # Add to calibre_metadata db
@@ -148,8 +183,9 @@ if True:
                             '%(num)d of %(tot)d' % dict(num=i + 1, tot=len(installed_books)))
 
                 # Remove orphans (books no longer in GoodReader) from db
-                s = set(installed_books)
-                orphans = [x for x in cached_books if x not in s]
+                ib = set(installed_books)
+                mb = set(moved_books)
+                orphans = [x for x in cached_books if x not in ib and x not in mb]
 
                 if orphans:
                     for book in orphans:
@@ -158,11 +194,11 @@ if True:
                         cur.execute('''DELETE FROM metadata
                                        WHERE filename = {0}
                                     '''.format(json.dumps(book)))
-
                 cur.close()
                 con.commit()
 
                 # Copy the updated db to the iDevice
+                self._log("updating remote_metadata")
                 self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
 
             if self.report_progress is not None:
@@ -287,7 +323,7 @@ if True:
             if not self.ios_connection['app_installed']:
                 if DEBUG_CAN_HANDLE:
                     self._log("2. GoodReader installed, attempting connection")
-                self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_id=self.preferred_app_id)
+                self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_id=self.app_id)
                 self.ios_connection['device_name'] = self.ios.device_name
                 if DEBUG_CAN_HANDLE:
                     self._log("2a. self.ios_connection: %s" % _show_current_connection())
@@ -340,13 +376,14 @@ if True:
         Delete books at paths on device.
         '''
         self._log_location()
-        self._log("cached_books: %s" % self.cached_books)
+        if self.prefs.get('development_mode', False):
+            self._log("cached_books: %s" % self.cached_books)
 
         file_count = float(len(paths))
 
         for i, path in enumerate(paths):
             self._log("removing %s" % repr(path))
-            ios_path = '/'.join(['/Documents', path])
+            ios_path = '/'.join([self.documents_folder, path])
             self.ios.remove(ios_path)
 
         # Update the db
@@ -364,6 +401,7 @@ if True:
             con.commit()
 
         # Copy the updated db to the iDevice
+        self._log("updating remote_metadata")
         self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
 
     def eject(self):
@@ -385,7 +423,7 @@ if True:
         outfile: file object (result of an open() call)
         '''
         self._log_location()
-        self.ios.copy_from_idevice('/'.join(['/Documents', path]), outfile)
+        self.ios.copy_from_idevice('/'.join([self.documents_folder, path]), outfile)
 
     def is_usb_connected(self, devices_on_system, debug=False, only_presence=False):
         '''
@@ -520,6 +558,16 @@ if True:
 
         return False, None
 
+    def post_yank_cleanup(self):
+        '''
+        Called after device disconnects - can_handle() returns False
+        We don't know if the device was ejected cleanly, or disconnected cleanly.
+        User may have simply pulled the USB cable. If so, USBMUXD may complain of a
+        broken pipe upon physical reconnection.
+        '''
+        self._log_location()
+        self.ios_connection['connected'] = False
+
     def prepare_addable_books(self, paths):
         '''
         Given a list of paths, returns another list of paths. These paths
@@ -537,7 +585,7 @@ if True:
         tdir = PersistentTemporaryDirectory('_prepare_goodreader')
         ans = []
         for path in paths:
-            if not self.ios.exists('/'.join(['/Documents', path])):
+            if not self.ios.exists('/'.join([self.documents_folder, path])):
                 ans.append((path, 'File not found', 'File not found'))
                 continue
 
@@ -611,9 +659,6 @@ if True:
                     if (book.title != cached_book[b'title'] or
                         book.authors != [cached_book[b'authors']]):
                         self._log("updating metadata for %s" % repr(book.path))
-                        #self._log("booklist: %s %s" % (book.title, book.authors))
-                        #self._log("database: %s %s" % (cached_book[b'title'], [cached_book[b'authors']]))
-
                         cur.execute('''UPDATE metadata
                                        SET authors = "{0}",
                                            author_sort = "{1}",
@@ -629,6 +674,7 @@ if True:
                 con.commit()
 
             # Copy the updated db to the iDevice
+            self._log("updating remote_metadata")
             self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
 
     def upload_books(self, files, names, on_card=None, end_session=True, metadata=None):
@@ -662,7 +708,7 @@ if True:
                 thumb = self._cover_to_thumb(metadata[i])
                 this_book = self._create_new_book(fpath, metadata[i], thumb)
                 new_booklist.append(this_book)
-                destination = '/'.join(['/Documents', self.path_template.format(metadata[i].title)])
+                destination = '/'.join([self.documents_folder, self.path_template.format(metadata[i].title)])
                 self.ios.copy_to_idevice(str(fpath), destination)
 
                 # Add to calibre_metadata db
@@ -696,6 +742,7 @@ if True:
             con.commit()
 
         # Copy the updated db to the iDevice
+        self._log("updating remote_metadata")
         self.ios.copy_to_idevice(str(self.local_metadata), str(self.remote_metadata))
 
         if self.report_progress is not None:
@@ -844,6 +891,30 @@ if True:
 
         return this_book
 
+    def _get_nested_folder_contents(self, top_folder):
+        '''
+        Walk the contents of documents folder iteratively to get all nested files
+        '''
+        def _get_nested_files(folder, stats, file_list):
+            files = self.ios.listdir('/'.join([top_folder, folder]))
+            for f in files:
+                if files[f]['st_ifmt'] == 'S_IFREG':
+                    file_list.append('/'.join([folder, f]))
+                elif files[f]['st_ifmt'] == 'S_IFDIR':
+                    file_list = _get_nested_files(f, files[f], file_list)
+            return file_list
+
+        self._log_location(top_folder)
+
+        file_list = []
+        files = self.ios.listdir(top_folder)
+        for f in files:
+            if files[f]['st_ifmt'] == 'S_IFREG':
+                file_list.append(f)
+            elif files[f]['st_ifmt'] == 'S_IFDIR':
+                file_list = _get_nested_files(f, files[f], file_list)
+        return file_list
+
     def _localize_database_path(self, remote_db_path):
         '''
         Copy remote_db_path from iOS to local storage as needed
@@ -909,30 +980,44 @@ if True:
         self._log_location("remote_path: '%s'" % (remote_path))
 
         local_path = None
-        pdf_stats = {}
+        path = remote_path.split('/')[-1]
+        if iswindows:
+            from calibre.utils.filenames import shorten_components_to
+            plen = len(self.temp_dir)
+            path = ''.join(shorten_components_to(245-plen, [path]))
 
-        pdf_stats = self.ios.stat(remote_path)
-        if pdf_stats:
-            path = remote_path.split('/')[-1]
-            if iswindows:
-                from calibre.utils.filenames import shorten_components_to
-                plen = len(self.temp_dir)
-                path = ''.join(shorten_components_to(245-plen, [path]))
+        full_path = os.path.join(self.temp_dir, path)
+        if os.path.exists(full_path):
+            lfs = os.stat(full_path)
+            if (int(pdf_stats['st_mtime']) == lfs.st_mtime and
+                int(pdf_stats['st_size']) == lfs.st_size):
+                local_db_path = full_path
 
-            full_path = os.path.join(self.temp_dir, path)
-            if os.path.exists(full_path):
-                lfs = os.stat(full_path)
-                if (int(pdf_stats['st_mtime']) == lfs.st_mtime and
-                    int(pdf_stats['st_size']) == lfs.st_size):
-                    local_db_path = full_path
+        if not local_path:
+            with open(full_path, 'wb') as out:
+                self.ios.copy_from_idevice(remote_path, out)
+            local_path = out.name
 
-            if not local_path:
-                with open(full_path, 'wb') as out:
-                    self.ios.copy_from_idevice(remote_path, out)
-                local_path = out.name
-        else:
-            self._log_location("'%s' not found" % remote_path)
-            raise DatabaseNotFoundException
+        return local_path
 
-        return {'path': local_path, 'stats': pdf_stats}
+    def _reset_ios_connection(self,
+                              app_installed=False,
+                              device_name=None,
+                              ejected=False,
+                              udid=0):
+        if self.prefs.get('development_mode', False):
+            connection_state = ("connected:{0:1} app_installed:{1:1} device_name:{2} udid:{3}".format(
+                self.ios_connection['connected'],
+                self.ios_connection['app_installed'],
+                self.ios_connection['device_name'],
+                self.ios_connection['udid'])
+                )
+
+            self._log_location(connection_state)
+
+        self.ios_connection['app_installed'] = app_installed
+        self.ios_connection['connected'] = False
+        self.ios_connection['device_name'] = device_name
+        self.ios_connection['udid'] = udid
+
 

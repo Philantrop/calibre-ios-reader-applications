@@ -72,6 +72,7 @@ if True:
             'read': 'READ',
             'reading_list': 'READING LIST'
             }
+        self.format_map = ['epub']
         self.ios_connection = {
             'app_installed': False,
             'connected': False,
@@ -324,7 +325,7 @@ if True:
                 self.report_progress(1.0, 'finished')
 
             self.cached_books = cached_books
-            if self.prefs.get('developer_mode', False):
+            if self.prefs.get('development_mode', False):
                 self._log("cached %d books from Marvin:" % len(cached_books))
                 for book in self.cached_books:
                     self._log("{0:30} {1:42} {2} {3}".format(
@@ -449,7 +450,7 @@ if True:
             if not self.ios_connection['app_installed']:
                 if DEBUG_CAN_HANDLE:
                     self._log("2. Marvin installed, attempting connection")
-                self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_id=self.preferred_app_id)
+                self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_id=self.app_id)
                 self.ios_connection['device_name'] = self.ios.device_name
                 if DEBUG_CAN_HANDLE:
                     self._log("2a. self.ios_connection: %s" % _show_current_connection())
@@ -547,7 +548,7 @@ if True:
                 continue
 
         # Copy the command file to the staging folder
-        self._stage_command_file(command_name, command_soup, show_command=self.prefs.get('developer_mode', False))
+        self._stage_command_file(command_name, command_soup, show_command=self.prefs.get('development_mode', False))
 
         # Wait for completion
         self._wait_for_command_completion(command_name)
@@ -1056,7 +1057,7 @@ if True:
                 self._log_location("sending update_metadata() command, %d changes detected" % changed)
 
                 # Stage the command file
-                self._stage_command_file(command_name, command_soup, show_command=self.prefs.get('developer_mode', False))
+                self._stage_command_file(command_name, command_soup, show_command=self.prefs.get('development_mode', False))
 
                 # Wait for completion
                 self._wait_for_command_completion(command_name)
@@ -1246,7 +1247,7 @@ if True:
         manifest_count = len(upload_soup.manifest.findAll(True))
         if manifest_count:
             # Copy the command file to the staging folder
-            self._stage_command_file("upload_books", upload_soup, show_command=self.prefs.get('developer_mode', False))
+            self._stage_command_file("upload_books", upload_soup, show_command=self.prefs.get('development_mode', False))
 
             # Wait for completion
             self._wait_for_command_completion("upload_books")
@@ -1256,7 +1257,7 @@ if True:
             self._log("Sending metadata updates")
 
             # Copy the command file to the staging folder
-            self._stage_command_file("update_metadata", update_soup, show_command=self.prefs.get('developer_mode', False))
+            self._stage_command_file("update_metadata", update_soup, show_command=self.prefs.get('development_mode', False))
 
             # Wait for completion
             self._wait_for_command_completion("update_metadata")
@@ -1541,7 +1542,7 @@ if True:
                               device_name=None,
                               ejected=False,
                               udid=0,
-                              verbose=True):
+                              verbose=False):
         if verbose:
             connection_state = ("connected:{0:1} app_installed:{1:1} device_name:{2} udid:{3}".format(
                 self.ios_connection['connected'],
