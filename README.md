@@ -11,14 +11,16 @@ This document provides details of the communication protocol for the _iOS reader
 ###General overview###
 Apple’s iOS does not allow a host computer direct access to a connected iDevice’s folder structure. Various solutions are available to overcome this restriction, including jailbreaking the iDevice, or use of additional software, e.g. [iFunbox](http://www.i-funbox.com).
 
-The _iOS reader applications_ device driver uses an open source code library  [libiMobileDevice](http://www.libimobiledevice.org) to access the iOS file system. The libiMobileDevice libraries for Linux, OS X and Windows (built from v1.1.5 source) are bundled with calibre (starting with version 0.9.31), along with glue code ([calibre.devices.idevice.libimobiledevice.py](https://github.com/kovidgoyal/calibre/blob/master/src/calibre/devices/idevice/libimobiledevice.py)). The libiMobileDevice libraries seem to work well with calibre under iOS 6.x. Future releases of iOS may require updating the libiMobileDevice libraries.
+The _iOS reader applications_ device driver uses an open source code library  [libiMobileDevice](http://www.libimobiledevice.org) to access the iOS file system. The libiMobileDevice libraries for Linux, OS X and Windows (built from v1.1.5 source) are bundled with calibre (starting with version 0.9.31), along with glue code ([calibre.devices.idevice.libimobiledevice.py](https://github.com/kovidgoyal/calibre/blob/master/src/calibre/devices/idevice/libimobiledevice.py)). The libiMobileDevice libraries seem to work well with calibre under iOS 5.x and 6.x. Future releases of iOS may require updating the libiMobileDevice libraries.
 
-The initial release of the _iOS reader applications_ device driver supports iBooks and [Marvin](http://marvinapp.com). iBooks support is implemented by calling calibre’s existing iTunes driver. Marvin support is implemented by loading overlays at runtime, specific to Marvin, discussed in more depth in [Device driver overlays](#device-driver-overlays).
+The initial release of the _iOS reader applications_ device driver supports iBooks, [Marvin](http://marvinapp.com) and [GoodReader](http://goodreader.com/goodreader.html). iBooks support is implemented by calling calibre’s existing iTunes driver. Marvin support is implemented by loading overlays at runtime, specific to Marvin, discussed in more depth in [Device driver overlays](#device-driver-overlays). GoodReader support is included as an example of a modeless, calibre-unaware driver.
 
 The device driver is designed to be extensible to support multiple iOS reader applications. Adding support for a new reader application requires two programming efforts:
 
 - [Application implementation](#application-implementation) in the iOS application (written in Objective C) adds the ‘calibre connection’, polling for and responding to commands initiating in calibre.
 - [Device driver overlays](#device-driver-overlays) contained in a single file (written in python) implementing calibre device driver functionality.
+
+Additionally, a device driver for a calibre-unaware app may be implemented without any application changes. This is suitable only for apps which monitor their sandbox folders for changes. GoodReader is such an application. The GoodReader driver is discussed in detail in the [Calibre-unaware reader applications](#calibre-unaware-reader-applications) section.
 
 ---
 
@@ -292,7 +294,21 @@ The simplest calibre development environment is a text editor and a command shel
 
     calibre-debug -g
 
-<samp>plugins/iOS reader applications.json</samp>, stored in the user’s configuration directory, contains a variable <samp>developer\_mode</samp>. Setting <samp>developer_mode</samp> to **true** will print the content of all commands to the debug stream when when Marvin is the selected reader application.
+<samp>plugins/iOS reader applications.json</samp>, stored in the user’s configuration directory, contains a variable <samp>developer\_mode</samp>. Setting <samp>development_mode</samp> to **true** will print the content of all commands to the debug stream when when Marvin is the selected reader application.
 
 ---
-Last update June 9, 2013 6:12:13 AM MDT
+###Calibre-unaware reader applications###
+Some reader applications allow modeless interaction with their Documents folder through iTunes. For these reader applications, it may be possible to implement a driver with basic IO functionality without implementing the ‘smart’ protocol described above.
+
+The GoodReader code is a good starting point for such a driver.
+
+* GoodReader monitors its Documents folder in realtime, displaying content changes as they occur.
+* GoodReader does not present any metadata other than the cover, and has no apparent database other than the folder structure of Documents.
+* There is no 'GoodReader Options' tab in the config dialog, and thus no options, switches, or help file. The functionality for this driver is very similar to the driver for a Kindle or Sony hardware reader.
+
+The driver parses the Documents folder for installed books, building its own sqlite database by passing the PDFs to calibre to extract metadata. The first time the driver sees a book, it takes some time to parse it for metadata, but subsequent references to the same book in the same folder location are retrieved from the driver's cached metadata. The database is stored in the reader app's sandbox, and updated after every operation.
+
+There are some inconsistencies between calibre's Device view and GoodReader's My Documents view. GoodReader supports nested folders, calibre does not. Calibre's device view shows all discovered PDFs in GoodReader in a flat list. Any books added to GoodReader are added to the top level of the My Documents folder. Moving them to a subfolder must be done within the GoodReader application.
+
+---
+Last update June 18, 2013 2:19:57 PM MDT

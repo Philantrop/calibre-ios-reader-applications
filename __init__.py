@@ -218,7 +218,7 @@ class BookList(CollectionsBookList):
             if changed:
                 # Stage the command file
                 self.parent._stage_command_file(command_name, command_soup,
-                                                show_command=self.parent.prefs.get('developer_mode', False))
+                                                show_command=self.parent.prefs.get('development_mode', False))
 
                 # Wait for completion
                 self.parent._wait_for_command_completion(command_name)
@@ -413,7 +413,6 @@ class iOSReaderApp(DriverBase):
     minimum_calibre_version = (0, 9, 34)
     name = 'iOS reader applications'
     overlays_loaded = False
-    preferred_app = None
     supported_platforms = ['linux', 'osx', 'windows']
     temp_dir = None
     verbose = None
@@ -690,13 +689,25 @@ class iOSReaderApp(DriverBase):
 
         # Confirm the installation of the preferred reader app
         self.app_id = None
-        self.ios_reader_app = self.prefs.get('preferred_reader_app', None)
 
-        if self.ios_reader_app:
-            self.app_id = self._get_connected_device_info()
+        # Special case development overlay
+        if (self.prefs.get('development_mode', False) and
+            self.prefs.get('development_overlay', None) and
+            self.prefs.get('development_app_id', None)):
+
+            self.app_id = self.prefs.get('development_app_id', None)
+            self.ios_reader_app = "development_mode"
+            self._get_connected_device_info()
+
         else:
-            self._log("No preferred reader app selected in config")
-            self.ios_reader_app = None
+            self.ios_reader_app = self.prefs.get('preferred_reader_app', None)
+
+            if self.ios_reader_app:
+                self.app_id = self._get_connected_device_info()
+            else:
+                self._log("No preferred reader app selected in config")
+                self.ios_reader_app = None
+
 
         # Device connected, app installed
         if self.app_id is not None and self.ios_reader_app is not None:
@@ -842,7 +853,10 @@ class iOSReaderApp(DriverBase):
 
         # Load the class overlay methods
         self._load_reader_app_overlays(self.ios_reader_app)
-        self.icon = os.path.join(self.resources_path, 'icons', '%s.png' % self.ios_reader_app)
+        if self.ios_reader_app == 'development_mode':
+            self.icon = None
+        else:
+            self.icon = os.path.join(self.resources_path, 'icons', '%s.png' % self.ios_reader_app)
 
         self._initialize_overlay()
         self._log("{:~^80}".format(" switching to %s overlay " % self.ios_reader_app))
@@ -936,7 +950,7 @@ class iOSReaderApp(DriverBase):
         device_list = self.ios.get_device_list()
         if device_list is None:
             raise libiMobileDeviceException("Unable to communicate with libiMobileDevice")
-        self.preferred_app_id = None
+        app_id = None
         try:
             if len(device_list):
                 if len(device_list) == 1:
@@ -952,25 +966,27 @@ class iOSReaderApp(DriverBase):
                     device_info.pop('Model')
                     self.device_profile = dict(preferences.items() + device_info.items())
 
-                    # Find the first installed app (iPad version takes precedence)
-                    for _app_id in READER_APP_ALIASES[self.ios_reader_app]:
-                        self._log("mounting '%s'" % _app_id)
-                        if self.ios.mount_ios_app(app_id=_app_id):
-                            app_id = _app_id
-                            self.ios.disconnect_idevice()
-                            break
-                    self.preferred_app_id = app_id
+                    # Use development_app_id if development mode
+                    if self.prefs.get('development_mode', False):
+                        app_id = self.prefs.get('development_app_id', None)
+                    if not app_id:
+                        # Find the first installed app (iPad version takes precedence)
+                        for _app_id in READER_APP_ALIASES[self.ios_reader_app]:
+                            self._log("mounting '%s'" % _app_id)
+                            if self.ios.mount_ios_app(app_id=_app_id):
+                                app_id = _app_id
+                                self.ios.disconnect_idevice()
+                                break
                 else:
                     self._log("Too many connected iDevices")
             else:
                 self._log("No connected iDevices")
         except:
-            self.preferred_app_id = None
             import traceback
             traceback.print_exc()
             exc_type, exc_value, exc_traceback = sys.exc_info()
             self._log(traceback.format_exception_only(exc_type, exc_value)[0].strip())
-        return self.preferred_app_id
+        return app_id
 
     def _init_prefs(self):
         '''
@@ -978,7 +994,7 @@ class iOSReaderApp(DriverBase):
         '''
         pref_map = {
             'plugin_version': b"%d.%d.%d" % self.version,
-            'developer_mode': False,
+            'development_mode': False,
             #'additional_readers': os.sep.join(['path','to','your','reader_class.py'])
             }
         for pm in pref_map:
@@ -1007,15 +1023,18 @@ class iOSReaderApp(DriverBase):
         self._log_location("'%s'" % cls_name)
 
         # Store the raw source to a temp file, import it
-        overlay_source = 'readers/%s_overlays.py' % cls_name
-        basename = re.sub('readers/', '', overlay_source)
-        tmp_file = os.path.join(tempfile.gettempdir(), '_calibre_ios_reader_apps_plugin', basename)
-        if not os.path.exists(os.path.dirname(tmp_file)):
-            os.makedirs(os.path.dirname(tmp_file))
-        with open(tmp_file, 'w') as tf:
-            tf.write(get_resources(overlay_source))
-        overlay = imp.load_source("temporary_overlay_methods", tmp_file)
-        os.remove(tmp_file)
+        if cls_name == "development_mode":
+            overlay = imp.load_source("temporary_overlay_methods", self.prefs.get('development_overlay', None))
+        else:
+            overlay_source = 'readers/%s_overlays.py' % cls_name
+            basename = re.sub('readers/', '', overlay_source)
+            tmp_file = os.path.join(tempfile.gettempdir(), '_calibre_ios_reader_apps_plugin', basename)
+            if not os.path.exists(os.path.dirname(tmp_file)):
+                os.makedirs(os.path.dirname(tmp_file))
+            with open(tmp_file, 'w') as tf:
+                tf.write(get_resources(overlay_source))
+            overlay = imp.load_source("temporary_overlay_methods", tmp_file)
+            os.remove(tmp_file)
 
         # Extend iOSReaderApp with the functions defined in the overlay
         # [(<name>, <function>), (<name>, <function>)...]

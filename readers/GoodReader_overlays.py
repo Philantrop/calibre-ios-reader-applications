@@ -295,7 +295,7 @@ if True:
             if not self.ios_connection['app_installed']:
                 if DEBUG_CAN_HANDLE:
                     self._log("2. GoodReader installed, attempting connection")
-                self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_id=self.preferred_app_id)
+                self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_id=self.app_id)
                 self.ios_connection['device_name'] = self.ios.device_name
                 if DEBUG_CAN_HANDLE:
                     self._log("2a. self.ios_connection: %s" % _show_current_connection())
@@ -348,7 +348,7 @@ if True:
         Delete books at paths on device.
         '''
         self._log_location()
-        if self.prefs.get('developer_mode', False):
+        if self.prefs.get('development_mode', False):
             self._log("cached_books: %s" % self.cached_books)
 
         file_count = float(len(paths))
@@ -528,6 +528,16 @@ if True:
             pass
 
         return False, None
+
+    def post_yank_cleanup(self):
+        '''
+        Called after device disconnects - can_handle() returns False
+        We don't know if the device was ejected cleanly, or disconnected cleanly.
+        User may have simply pulled the USB cable. If so, USBMUXD may complain of a
+        broken pipe upon physical reconnection.
+        '''
+        self._log_location()
+        self.ios_connection['connected'] = False
 
     def prepare_addable_books(self, paths):
         '''
@@ -967,7 +977,7 @@ if True:
                               device_name=None,
                               ejected=False,
                               udid=0):
-        if self.prefs.get('developer_mode', False):
+        if self.prefs.get('development_mode', False):
             connection_state = ("connected:{0:1} app_installed:{1:1} device_name:{2} udid:{3}".format(
                 self.ios_connection['connected'],
                 self.ios_connection['app_installed'],
