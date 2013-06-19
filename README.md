@@ -297,6 +297,7 @@ The simplest calibre development environment is a text editor and a command shel
 <samp>plugins/iOS reader applications.json</samp>, stored in the user’s configuration directory, contains a variable <samp>developer\_mode</samp>. Setting <samp>development_mode</samp> to **true** will print the content of all commands to the debug stream when when Marvin is the selected reader application.
 
 ---
+
 ###Calibre-unaware reader applications###
 Some reader applications allow modeless interaction with their Documents folder through iTunes. For these reader applications, it may be possible to implement a driver with basic IO functionality without implementing the ‘smart’ protocol described above.
 
@@ -311,15 +312,28 @@ The driver parses the <samp>Documents</samp> folder for installed books, buildin
 There are some inconsistencies between calibre's Device view and GoodReader's **My Documents** view. GoodReader supports nested folders, calibre does not. Calibre's device view shows all discovered PDFs in GoodReader in a flat list. Any books added to GoodReader are added to the top level of the **My Documents folder**. Moving them to a subfolder must be done within the GoodReader application.
 
 ---
+
 ###Developing a new driver###
 Development of new driver code can be done without rebuilding the plugin. <samp>iOS reader applications.json</samp>, located in calibre's configuration directory can be modified to signal the driver of the presence of a driver overlay file under development. To find calibre's configuration directory on your machine, go to  _Preferences_ | _Advanced_ | _Miscellaneous_, then click **Open calibre configuration directory**.
 
 Edit <samp>iOS reader applications.json</samp> to include the following lines:
-`"development_mode": true,`
-`"development_app_id": "com.somecompany.readerappname",`
-`"development_overlay": "\\path\\to\\development_overlay.py",`
 
-When the driver loads, if it finds all three of these fields in the JSON file, the specified overlay file will be loaded with the specified app_id. You can add switches to the JSON file to control the behavior of your driver. Switches should be prefaced with a unique name representing the reader app, as all reader app preferences are stored in the JSON file.
+    "development_mode": true,
+    "development_app_id": "com.somecompany.readerappname",
+    "development_overlay": "\\path\\to\\development_overlay.py",
+
+<samp>development\_app\_id</samp> is the app id of the reader you're working with. For example, iBooks is <samp>com.apple.iBooks</samp>.
+
+<samp>development_overlay</samp> is the full path to your overlay source file on your machine. Note that JSON data fields require escaped slashes.
+
+During initialization, if these three fields exist in the JSON file, the specified overlay file will be loaded with the specified app_id. You can add switches to the JSON file to control the behavior of your driver. Switches should be prefaced with a unique name representing the reader app, as all reader app preferences are stored in the JSON file.
+
+To run the driver after editing your code, restart calibre.
+
+To see diagnostic messages, run calibre in debug mode:
+
+    calibre-debug -g
 
 ---
+
 Last update June 19, 2013 9:00:00 AM MDT
