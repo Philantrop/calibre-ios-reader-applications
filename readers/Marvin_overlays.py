@@ -83,7 +83,6 @@ if True:
         self.operation_timed_out = False
         self.path_template = '{0}.epub'
         self.status_fs = '/'.join([self.staging_folder, 'status.xml'])
-        self.temp_dir = PersistentTemporaryDirectory('_Marvin_local_db')
         self.update_list = []
 
         # ~~~~~~~~~ Confirm/create thumbs archive ~~~~~~~~~

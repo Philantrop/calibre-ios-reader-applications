@@ -59,12 +59,6 @@ READER_APP_ALIASES = {
                       'Marvin':     [b'com.appstafarian.Marvin', b'com.appstafarian.MarvinIP']
                      }
 
-READER_APP_ICONS = [
-#    'images/GoodReader.png',
-    'images/iBooks.png',
-    'images/Marvin.png',
-    ]
-
 class Book(Metadata):
     '''
     A simple class describing a book
@@ -1020,9 +1014,7 @@ class iOSReaderApp(DriverBase):
         else:
             overlay_source = 'readers/%s_overlays.py' % cls_name
             basename = re.sub('readers/', '', overlay_source)
-            tmp_file = os.path.join(tempfile.gettempdir(), '_calibre_ios_reader_apps_plugin', basename)
-            if not os.path.exists(os.path.dirname(tmp_file)):
-                os.makedirs(os.path.dirname(tmp_file))
+            tmp_file = os.path.join(self.temp_dir, basename)
             with open(tmp_file, 'w') as tf:
                 tf.write(get_resources(overlay_source))
             overlay = imp.load_source("temporary_overlay_methods", tmp_file)

@@ -43,6 +43,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self.verbose = parent.verbose
         self._log_location(app_list)
         self.setupUi(self)
+        self.support_label.setOpenExternalLinks(True)
 
         # Restore the debug settings
         self.debug_plugin.setChecked(self.prefs.get('debug_plugin', False))
@@ -167,7 +168,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
 
 
 # For testing ConfigWidget, run from command line:
-# cd ~/Dropbox/calibre/plugins/iOS_Reader_Apps
+# cd ~/Documents/calibredev/iOS_reader_applications
 # calibre-debug config.py
 # Search 'iOS Reader Apps'
 if __name__ == '__main__':
