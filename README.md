@@ -20,7 +20,7 @@ The device driver is designed to be extensible to support multiple iOS reader ap
 - [Application implementation](#application-implementation) in the iOS application (written in Objective C) adds the ‘calibre connection’, polling for and responding to commands initiating in calibre.
 - [Device driver overlays](#device-driver-overlays) contained in a single file (written in python) implementing calibre device driver functionality.
 
-Additionally, a device driver for a calibre-unaware app may be implemented without any application changes. This is suitable only for apps which monitor their sandbox folders for changes. GoodReader is such an application. The GoodReader driver is discussed in detail in the [Calibre-unaware reader applications](#calibre-unaware-reader-applications) section.
+Alternatively, a device driver for a calibre-unaware reader application may be implemented without any application changes. This is suitable only for apps which monitor their sandbox folders for changes. GoodReader is an example of such an application. The GoodReader driver is discussed in detail in the [Calibre-unaware reader applications](#calibre-unaware-reader-applications) section.
 
 ---
 
@@ -300,15 +300,26 @@ The simplest calibre development environment is a text editor and a command shel
 ###Calibre-unaware reader applications###
 Some reader applications allow modeless interaction with their Documents folder through iTunes. For these reader applications, it may be possible to implement a driver with basic IO functionality without implementing the ‘smart’ protocol described above.
 
-The GoodReader code is a good starting point for such a driver.
+The GoodReader driver code is a good starting point for such a driver.
 
-* GoodReader monitors its Documents folder in realtime, displaying content changes as they occur.
-* GoodReader does not present any metadata other than the cover, and has no apparent database other than the folder structure of Documents.
-* There is no 'GoodReader Options' tab in the config dialog, and thus no options, switches, or help file. The functionality for this driver is very similar to the driver for a Kindle or Sony hardware reader.
+* GoodReader monitors its <samp>Documents</samp> folder in realtime, displaying content changes as they occur.
+* GoodReader does not present any metadata to the user other than the cover, and uses the folder structure of <samp>Documents</samp> as its database.
+* There is no 'GoodReader Options' tab in the config dialog, and thus no options, switches, or help file. The functionality for this driver is very similar to the driver for a Kindle or Sony hardware reader - it simply adds and deletes files.
 
-The driver parses the Documents folder for installed books, building its own sqlite database by passing the PDFs to calibre to extract metadata. The first time the driver sees a book, it takes some time to parse it for metadata, but subsequent references to the same book in the same folder location are retrieved from the driver's cached metadata. The database is stored in the reader app's sandbox, and updated after every operation.
+The driver parses the <samp>Documents</samp> folder for installed books, building its own sqlite database by passing the PDFs to calibre to extract metadata. The first time the driver sees a book, it takes some time to parse it for metadata, but subsequent references to the same book in the same folder location are retrieved from the driver's cached metadata. The database is stored in the reader app's sandbox, and updated after every operation.
 
-There are some inconsistencies between calibre's Device view and GoodReader's My Documents view. GoodReader supports nested folders, calibre does not. Calibre's device view shows all discovered PDFs in GoodReader in a flat list. Any books added to GoodReader are added to the top level of the My Documents folder. Moving them to a subfolder must be done within the GoodReader application.
+There are some inconsistencies between calibre's Device view and GoodReader's **My Documents** view. GoodReader supports nested folders, calibre does not. Calibre's device view shows all discovered PDFs in GoodReader in a flat list. Any books added to GoodReader are added to the top level of the **My Documents folder**. Moving them to a subfolder must be done within the GoodReader application.
 
 ---
-Last update June 18, 2013 2:19:57 PM MDT
+###Developing a new driver###
+Development of new driver code can be done without rebuilding the plugin. <samp>iOS reader applications.json</samp>, located in calibre's configuration directory can be modified to signal the driver of the presence of a driver overlay file under development. To find calibre's configuration directory on your machine, go to  _Preferences_ | _Advanced_ | _Miscellaneous_, then click **Open calibre configuration directory**.
+
+Edit <samp>iOS reader applications.json</samp> to include the following lines:
+`"development_mode": true,`
+`"development_app_id": "com.somecompany.readerappname",`
+`"development_overlay": "\\path\\to\\development_overlay.py",`
+
+When the driver loads, if it finds all three of these fields in the JSON file, the specified overlay file will be loaded with the specified app_id. You can add switches to the JSON file to control the behavior of your driver. Switches should be prefaced with a unique name representing the reader app, as all reader app preferences are stored in the JSON file.
+
+---
+Last update June 19, 2013 9:00:00 AM MDT
