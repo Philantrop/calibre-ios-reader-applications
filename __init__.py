@@ -53,9 +53,10 @@ plugin_prefs = JSONConfig('plugins/iOS reader applications')
 # List of app names as installed by iOS. Prefix with 'b' for libiMobileDevice.
 # These are the names that appear in the Config dialog for Preferred reader application
 # 'iBooks' is removed under linux
+# If an app is available in separate versions for iPad/iPhone, list iPad version first
 READER_APP_ALIASES = {
                       'iBooks':     [b'com.apple.iBooks'],
-                      'GoodReader': [b'com.goodiware.GoodReaderIPad'],
+                      'GoodReader': [b'com.goodiware.GoodReaderIPad', b'com.goodiware.GoodReader'],
                       'Marvin':     [b'com.appstafarian.Marvin', b'com.appstafarian.MarvinIP']
                      }
 
