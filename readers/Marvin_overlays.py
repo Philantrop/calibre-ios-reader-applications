@@ -327,10 +327,11 @@ if True:
             if self.prefs.get('development_mode', False):
                 self._log("cached %d books from Marvin:" % len(cached_books))
                 for book in self.cached_books:
-                    self._log("{0:30} {1:42} {2} {3}".format(
+                    self._log("{0:30} {1:42} {2} {3} {4}".format(
                         repr(self.cached_books[book]['title'][0:26]),
                         repr(self.cached_books[book]['uuid']),
                         repr(self.cached_books[book]['authors']),
+                        repr(self.cached_books[book]['device_collections']),
                         repr(book)))
 
         return booklist
@@ -1309,7 +1310,7 @@ if True:
         from calibre import strftime
         from calibre.ebooks.metadata import authors_to_string
 
-        self._log_location(metadata_x.title)
+        self._log_location("title: %s uuid: %s" % (repr(metadata_x.title), repr(metadata.uuid)))
 
         this_book = Book(metadata_x.title, authors_to_string(metadata_x.authors))
         this_book.author_sort = metadata_x.author_sort
@@ -1329,10 +1330,12 @@ if True:
         this_book.device_collections = self._get_field_items(metadata)
         if not metadata_only:
             this_book.device_collections.append('NEW')
-        if this_book.uuid in self.active_flags:
+
+        if this_book.uuid in self.active_flags.keys():
             this_book.device_collections = sorted(self.active_flags[this_book.uuid] +
                                                   this_book.device_collections,
                                                   key=sort_key)
+
         this_book.format = format
         this_book.path = self.path_template.format(metadata.uuid)
         this_book.pubdate = strftime("%Y-%m-%d", t=metadata_x.pubdate)
@@ -1345,7 +1348,7 @@ if True:
         this_book.title_sort = metadata_x.title_sort
         return this_book
 
-    def _get_field_items(self, mi, verbose=False):
+    def _get_field_items(self, mi):
         '''
         Return the metadata from collection_fields for mi
 
@@ -1354,6 +1357,7 @@ if True:
             'Text, column shown in the tag browser'
             'Text, but with a fixed set of permitted values'
         '''
+        verbose = self.prefs.get('development_mode', False)
         if verbose:
             self._log_location(mi.title)
 
@@ -1389,6 +1393,14 @@ if True:
             else:
                 self._log_location("'%s': Invalid metadata field specified as collection source: '%s'" %
                                    (mi.title, field))
+
+        # Strip flag value, managed only in Marvin
+        flags_to_strip = []
+        for item in field_items:
+            if item.upper() in self.flags.values():
+                flags_to_strip.append(item)
+        for flag in flags_to_strip:
+            field_items.remove(flag)
 
         if verbose:
             self._log("collections: %s" % field_items)
@@ -1615,20 +1627,13 @@ if True:
         book_tag.insert(0, subjects_tag)
 
         # Add the collections
-        collection_assignments = self._get_field_items(book)
         cached_assignments = self.cached_books[target_epub]['device_collections']
-        # Remove flags before testing equality
         active_flags = []
         for flag in self.flags.values():
             if flag in cached_assignments:
-                cached_assignments.remove(flag)
                 active_flags.append(flag)
-
-        if cached_assignments != collection_assignments:
-            self._log(" collections: (device) %s != (library) %s" %
-                (cached_assignments, collection_assignments))
-            self.cached_books[target_epub]['device_collections'] = sorted(
-                active_flags + collection_assignments, key=sort_key)
+        collection_assignments = sorted(active_flags + self._get_field_items(book), key=sort_key)
+        self.cached_books[target_epub]['device_collections'] = collection_assignments
 
         collections_tag = Tag(update_soup, 'collections')
         if collection_assignments:
