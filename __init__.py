@@ -426,6 +426,7 @@ class iOSReaderApp(DriverBase):
         _PRODUCT_ID.add(0x12a3)     # iPad2 CDMA
 
         _PRODUCT_ID.add(0x12a5)     # iPad3 CDMA (Verizon)
+        _BCD.add(0x320)
 
         _PRODUCT_ID.add(0x12a9)     # iPad2 WiFi (2nd iteration)
         _BCD.add(0x240)
@@ -443,6 +444,9 @@ class iOSReaderApp(DriverBase):
     if True:
         _PRODUCT_ID.add(0x12ab)     # iPad Mini WiFi
         _BCD.add(0x250)
+
+        _PRODUCT_ID.add(0x12ab)     # iPad Mini WiFi + cellular
+        _BCD.add(0x270)
 
     '''     iPhone     '''
     if True:
