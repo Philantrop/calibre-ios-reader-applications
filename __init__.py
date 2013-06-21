@@ -404,7 +404,7 @@ class iOSReaderApp(DriverBase):
     supported_platforms = ['linux', 'osx', 'windows']
     temp_dir = None
     verbose = None
-    version = (1, 0, 1)
+    version = (1, 0, 2)
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -446,7 +446,8 @@ class iOSReaderApp(DriverBase):
         _BCD.add(0x250)
 
         _PRODUCT_ID.add(0x12ab)     # iPad Mini WiFi + cellular
-        _BCD.add(0x270)
+        _BCD.add(0x260)             # LTE Rogers (Canada)
+        _BCD.add(0x270)             # ???
 
     '''     iPhone     '''
     if True:
