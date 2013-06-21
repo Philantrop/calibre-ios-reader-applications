@@ -40,9 +40,9 @@ from PyQt4.Qt import QDialog, QIcon, QPixmap
 from PyQt4.uic import compileUi
 
 # Import glue from plugin if between calibre versions with glue updates
-if False:
-    # To enable, bundle a current copy of libimobiledevice.py, parse_xml.py in iOS_Reader_Apps folder
-    # Disable import of XmlPropertyListParser in local copy of libimobiledevice.py, replace with
+if True:
+    # To enable, bundle a current copy of libimobiledevice.py, parse_xml.py in iOS_reader_applications folder
+    # Disable import of XmlPropertyListParser in local copy of libimobiledevice.py (#24), replace with
     # from calibre_plugins.ios_reader_apps.parse_xml import XmlPropertyListParser
     from calibre_plugins.ios_reader_apps.libimobiledevice import libiMobileDevice, libiMobileDeviceException
 else:
@@ -404,7 +404,7 @@ class iOSReaderApp(DriverBase):
     supported_platforms = ['linux', 'osx', 'windows']
     temp_dir = None
     verbose = None
-    version = (1, 0, 0)
+    version = (1, 0, 1)
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
