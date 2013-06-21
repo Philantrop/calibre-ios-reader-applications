@@ -1626,13 +1626,20 @@ if True:
             subjects_tag.insert(0, subject_tag)
         book_tag.insert(0, subjects_tag)
 
-        # Add the collections
-        cached_assignments = self.cached_books[target_epub]['device_collections']
-        active_flags = []
-        for flag in self.flags.values():
-            if flag in cached_assignments:
-                active_flags.append(flag)
-        collection_assignments = sorted(active_flags + self._get_field_items(book), key=sort_key)
+        if False:
+            # Merge calibre collection assignments with Marvin flags only
+            cached_assignments = self.cached_books[target_epub]['device_collections']
+            active_flags = []
+            for flag in self.flags.values():
+                if flag in cached_assignments:
+                    active_flags.append(flag)
+            collection_assignments = sorted(active_flags + self._get_field_items(book), key=sort_key)
+        else:
+            # Merge calibre collection assignments with Marvin flags and Marvin collections
+            cas = set(self.cached_books[target_epub]['device_collections'] + self._get_field_items(book))
+            collection_assignments = list(cas, key=sort_key)
+
+        # Update the local cache
         self.cached_books[target_epub]['device_collections'] = collection_assignments
 
         collections_tag = Tag(update_soup, 'collections')
