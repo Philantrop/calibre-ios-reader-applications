@@ -1626,18 +1626,29 @@ if True:
             subjects_tag.insert(0, subject_tag)
         book_tag.insert(0, subjects_tag)
 
-        if False:
-            # Merge calibre collection assignments with Marvin flags only
-            cached_assignments = self.cached_books[target_epub]['device_collections']
-            active_flags = []
-            for flag in self.flags.values():
-                if flag in cached_assignments:
-                    active_flags.append(flag)
-            collection_assignments = sorted(active_flags + self._get_field_items(book), key=sort_key)
+
+        # Add the collections
+        # If no custom column(s) for collections, preserve existing Marvin collection assignments
+        # JSON switch 'marvin_merge_collections' controls whether to merge or replace existing collections
+        collection_fields = self.prefs.get('marvin_enabled_collection_fields', [])
+        if collection_fields:
+            if self.prefs.get('marvin_merge_collections', True):
+                # Append calibre collection assignments to existing Marvin collections, with existing flags
+                cas = set(self.cached_books[target_epub]['device_collections'] + self._get_field_items(book))
+                collection_assignments = sorted(list(cas), key=sort_key)
+            else:
+                # Replace existing Marvin collections with calibre collection assignments
+                # Preserve existing flags
+                cached_assignments = self.cached_books[target_epub]['device_collections']
+                active_flags = []
+                for flag in self.flags.values():
+                    if flag in cached_assignments:
+                        active_flags.append(flag)
+                collection_assignments = sorted(active_flags + self._get_field_items(book), key=sort_key)
+
         else:
-            # Merge calibre collection assignments with Marvin flags and Marvin collections
-            cas = set(self.cached_books[target_epub]['device_collections'] + self._get_field_items(book))
-            collection_assignments = list(cas, key=sort_key)
+            # Preserve existing Marvin assignments
+            collection_assignments = sorted(self.cached_books[target_epub]['device_collections'], key=sort_key)
 
         # Update the local cache
         self.cached_books[target_epub]['device_collections'] = collection_assignments

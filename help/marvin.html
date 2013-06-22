@@ -152,11 +152,11 @@
 <ul>
   <li> <em>Do nothing:</em> Books that already exist in Marvin's library will not be replaced or updated. This is the default behavior.</li>
   <li> <em>Replace:</em> Books that already exist in Marvin's library will be replaced with a new copy. Any existing assets for the old book — annotations, bookmarks, Deep View content — will be deleted.  </li>
-  <li><em>Update metadata:</em> Books that already exist in Marvin's library will be updated with new metadata from calibre, including covers and descriptions.</li>
+  <li><em>Update metadata:</em> Books that already exist in Marvin's library will be updated with new metadata from calibre, including covers and descriptions.<strong> </strong>If you have created and enabled a custom column for collection assignments, those assignments will be appended to existing collection assignments created in Marvin when updating metadata from calibre.</li>
   </ul>
   <p class="indent">If a book does not have a checkmark in calibre's <em>On Device</em> column, it will be added to Marvin as a new book, regardless of this setting.</p>
 <p><strong>Collections</strong></p>
-<p class="indent">Custom columns may be used to specify collection assignments when sending books to Marvin. See <a href="#creating_custom_columns">Creating custom columns for collection assignments</a> for details. Select one or more custom columns to be used for collection assignments. Collection assignments are applied when sending books to Marvin.</p>
+<p class="indent">Custom columns may be used to specify collection assignments when sending books to Marvin. See <a href="#creating_custom_columns">Creating custom columns for collection assignments</a> for details. Select one or more custom columns to be used for collection assignments. Collection assignments are applied when sending books to Marvin, replacing any existing collection assignments in Marvin.</p>
 <p><strong>Enable editing of Marvin collections in Device view</strong></p>
 <p class="indent">In Device view, the <em>Collections</em> column displays collection assignments, including Marvin's special collections <em>NEW</em>, <em>READING LIST</em> and <em>READ</em>. By default, the <em>Collections</em> column is a read-only view of the current collection assignments in Marvin. To enable editing of collection assignments in the Device view, enable this checkbox, then restart calibre. Edited collection assignments  are applied in Marvin immediately.</p>
 <p class="indent">If you are unable to edit collection assignments after enabling the checkbox and restarting calibre:</p>
@@ -220,8 +220,8 @@
   </tr>
   <tr>
     <td>Edit Marvin collection assignments directly</td>
-    <td>Device view: Select book, edit contents of Collections field. Collections should be a comma-separated list of assignments, including special Marvin flags <em>NEW</em>, <em>READING LIST</em> and <em>READ</em>.</td>
-    <td>Collection assignments, including special Marvin flags, are updated immediately.</td>
+    <td>Device view: Select book, edit contents of Collections field. Collections should be a comma-separated list of assignments, including  Marvin flags <em>NEW</em>, <em>READING LIST</em> and <em>READ</em>.</td>
+    <td>Collection assignments, including  Marvin flags, are updated immediately.</td>
   </tr>
 </table>
 </div>
@@ -231,8 +231,8 @@
 <div class="topic">
 <h4><a name="advanced_operations-library" id="advanced_operations-library"></a>5. <a href="#toc">Advanced operations - Library view</a></h4>
 <p>For books installed in both your calibre library and your Marvin library (indicated by a checkmark in the <em>On Device</em> column), you can refresh Marvin's metadata to match  calibre's metadata. To enable metadata updates, select <em>Update metadata</em> in <strong>When sending books already in Marvin.</strong></p>
-<p>If the book is checked in the <em>On Device</em> column, clicking <strong>Send to device</strong> will update the metadata in Marvin. </p>
-<p>If the book is unchecked in the <em>On Device</em> column, clicking <strong>Send to device</strong> will add the book to Marvin as a new book.</p>
+<p>If a book is <strong>checked</strong> in the <em>On Device</em> column, clicking <strong>Send to device</strong> will update the metadata in Marvin. </p>
+<p>If a book is <strong>unchecked</strong> in the <em>On Device</em> column, clicking <strong>Send to device</strong> will add the book to Marvin as a new book.</p>
 <table width="100%" border="1" class="operations">
   <caption>
   Advanced operations
@@ -244,15 +244,15 @@
     <td class="center" width="30%"><strong>Result</strong></td>
   </tr>
   <tr>
-    <td>Update metadata to current values, including Title, Title sort, Author, Author sort, Publisher, Published date, Series,  Series number, Tags, Comments and Cover.</td>
+    <td>Update Marvin metadata to current calibre values, including Title, Title sort, Author, Author sort, Publisher, Published date, Series,  Series number, Tags, Comments and Cover.</td>
     <td>Library view: Select book(s) to update, click <strong>Send to device</strong> in main toolbar (<span class="typed">D</span>).</td>
-    <td>Metadata for selected books is updated in Marvin.</td>
+    <td>Metadata for selected books is updated in Marvin. </td>
   </tr>
   <tr>
-    <td>Assign collections when sending books to Marvin.</td>
-    <td><p>1) <a href="#creating_custom_columns">Create a custom column for collection assignments</a>.<br />
+    <td>Apply custom column collection assignments to Marvin.</td>
+    <td><p>1) <a href="#creating_custom_columns">Create and enable a custom column for collection assignments</a>.<br />
       2) Library view: Select books to update, click <strong>Send to device</strong>  in main toolbar (<span class="typed">D</span>).</p></td>
-    <td>Metadata for selected books is updated in Marvin, and collection assignments are applied.</td>
+    <td>Metadata for selected books is updated in Marvin. Collection assignments from your enabled custom column(s) are appended to any existing collection assignments in Marvin.</td>
   </tr>
 </table>
 </div>
@@ -320,7 +320,7 @@
   <li>Click <strong>Send to device</strong> (<span class="typed">D</span>) to add calibre's copy to Marvin's library</li>
 </ul>
 
-<p><a name="faq_update_collection_assignments" id="faq_update_collection_assignments"></a><em>How do I update metadata (including collection assignments) for a group of books at the same time?</em></p>
+<p><a name="faq_update_collection_assignments" id="faq_update_collection_assignments"></a><em>How do I update metadata (including collection assignments created in calibre) for a group of books at the same time?</em></p>
 <ul>
   <li>Connect to Marvin</li>
   <li>In the main toolbar, click the down arrow next to the Marvin Device icon, select <strong>Configure this device</strong>.</li>
@@ -328,7 +328,8 @@
   <li>In Library view, click in the search bar, then type <span class="typed">ondevice:true</span> to list only the books installed in Marvin.</li>
   <li>Group-select the group of books you wish to update.</li>
   <li>Click <strong>Send to device</strong> (<span class="typed">D</span>).</li>
-  <li>The current metadata will be applied to all selected books, including collection assignments.</li>
+  <li>The current metadata will be applied to all selected books, including collection assignments created in calibre.</li>
+  <li><strong>Note:</strong> If you have created and enabled a custom column for collection assignments, those collection assignments will be appended to previously existing collections assigned in Marvin.</li>
   </ul>
 
 <p><a name="faq_apply_same_collection_assignment" id="faq_apply_same_collection_assignment"></a><em>How do I apply the same collection assignment to a group of books?</em></p>
