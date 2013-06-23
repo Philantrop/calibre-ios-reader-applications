@@ -877,7 +877,7 @@ if True:
 
         with open(os.path.join(self.temp_dir, pdf_stats['path']), 'rb') as f:
             stream = cStringIO.StringIO(f.read())
-            mi = get_metadata(stream)
+        mi = get_metadata(stream)
         this_book = Book(mi.title, ' & '.join(mi.authors))
         this_book.author_sort = author_to_author_sort(mi.authors[0])
         this_book.datetime = datetime.fromtimestamp(int(pdf_stats['stats']['st_birthtime'])).timetuple()
@@ -928,7 +928,7 @@ if True:
                 path = ''.join(shorten_components_to(245-plen, [path]))
 
             full_path = os.path.join(self.temp_dir, path)
-            return full_path
+            return os.path.normpath(full_path)
 
         self._log_location("remote_db_path: '%s'" % (remote_db_path))
 

@@ -424,6 +424,7 @@ class iOSReaderApp(DriverBase):
         _BCD.add(0x220)
 
         _PRODUCT_ID.add(0x12a3)     # iPad2 CDMA
+        _BCD.add(0x230)             # Verizon
 
         _PRODUCT_ID.add(0x12a5)     # iPad3 CDMA (Verizon)
         _BCD.add(0x320)

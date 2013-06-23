@@ -294,7 +294,7 @@ The simplest calibre development environment is a text editor and a command shel
 
     calibre-debug -g
 
-<samp>plugins/iOS reader applications.json</samp>, stored in the user’s configuration directory, contains a variable <samp>developer\_mode</samp>. Setting <samp>development_mode</samp> to **true** will print the content of all commands to the debug stream when when Marvin is the selected reader application.
+<samp>plugins/iOS reader applications.json</samp>, stored in the user’s configuration directory, contains a variable <samp>development\_mode</samp>. Setting <samp>development_mode</samp> to **true** will print the content of all commands to the debug stream when when Marvin is the selected reader application.
 
 ---
 
