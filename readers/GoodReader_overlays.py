@@ -873,7 +873,7 @@ if True:
         '''
         from calibre.ebooks.metadata import author_to_author_sort, authors_to_string, title_sort
         from calibre.ebooks.metadata.pdf import get_metadata
-        self._log_location(book)
+        self._log_location(pdf_stats['path'])
 
         with open(os.path.join(self.temp_dir, pdf_stats['path']), 'rb') as f:
             stream = cStringIO.StringIO(f.read())
@@ -987,16 +987,11 @@ if True:
             path = ''.join(shorten_components_to(245-plen, [path]))
 
         full_path = os.path.join(self.temp_dir, path)
-        if os.path.exists(full_path):
-            lfs = os.stat(full_path)
-            if (int(pdf_stats['st_mtime']) == lfs.st_mtime and
-                int(pdf_stats['st_size']) == lfs.st_size):
-                local_db_path = full_path
+        full_path = os.path.normpath(full_path)
 
-        if not local_path:
-            with open(full_path, 'wb') as out:
-                self.ios.copy_from_idevice(remote_path, out)
-            local_path = out.name
+        with open(full_path, 'wb') as out:
+            self.ios.copy_from_idevice(remote_path, out)
+        local_path = out.name
 
         return local_path
 

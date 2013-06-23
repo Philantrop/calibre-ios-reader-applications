@@ -737,7 +737,7 @@ class iOSReaderApp(DriverBase):
                     self._class_reconfigure()
                     self.overlays_loaded = True
                     # Unique to Windows - need to connect to app folder before continuing
-                    self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_name=self.ios_reader_app)
+                    self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_id=self.app_id)
                     self.ios_connection['device_name'] = self.ios.device_name
             else:
                 self._log("device connected, but no reader app selected")

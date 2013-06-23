@@ -210,7 +210,7 @@ class XmlPropertyListParser(object):
         self._push_value(d)
 
     def _parse_real(self, name, content):
-        _content = content.replace(',', '.')
+        content = content.replace(',', '.')
         try:
             self._push_value(float(content))
         except:
