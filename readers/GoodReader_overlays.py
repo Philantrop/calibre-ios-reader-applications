@@ -4,7 +4,7 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
-import base64, cStringIO, json, os, sqlite3, time
+import base64, cStringIO, json, os, sqlite3, subprocess, time
 from datetime import datetime
 
 from calibre.constants import islinux, isosx, iswindows
@@ -30,6 +30,9 @@ if True:
         # ~~~~~~~~~ Calibre constants ~~~~~~~~~
         # None indicates that the driver supports backloading from device to library
         self.BACKLOADING_ERROR_MESSAGE = None
+        self.COVER_WIDTH = 180
+        self.COVER_HEIGHT = 270
+
 
         # Plugboards
         self.CAN_DO_DEVICE_DB_PLUGBOARD = False
@@ -102,13 +105,16 @@ if True:
                             ''')
                 rows = cur.fetchall()
                 cached_books = [row[b'filename'] for row in rows]
-                for b in sorted(cached_books):
-                    self._log(b)
+                if self.prefs.get('development_mode', False):
+                    self._log("cached_books:")
+                    for b in sorted(cached_books):
+                        self._log(b)
 
                 # Get the currently installed filenames from the documents folder
                 installed_books = self._get_nested_folder_contents(self.documents_folder)
-                for b in sorted(installed_books):
-                    self._log(b)
+                if self.prefs.get('development_mode', False):
+                    for b in sorted(installed_books):
+                        self._log(b)
 
                 moved_books = []
                 for i, book in enumerate(installed_books):
@@ -149,6 +155,8 @@ if True:
                             this_book = self._get_metadata(book, pdf_stats)
                             os.remove(local_path)
                         except:
+                            import traceback
+                            traceback.print_exc()
                             self._log("ERROR reading metadata from %s" % book)
                             os.remove(local_path)
                             continue
@@ -578,11 +586,11 @@ if True:
         (original_path, the exception instance, traceback)
         Modeled on calibre.devices.mtp.driver:prepare_addable_books() #304
         '''
+        from calibre import sanitize_file_name
         from calibre.ptempfile import PersistentTemporaryDirectory
-        from calibre.utils.filenames import shorten_components_to
 
         self._log_location()
-        tdir = PersistentTemporaryDirectory('_prepare_goodreader')
+        tdir = PersistentTemporaryDirectory('_prep_gr')
         ans = []
         for path in paths:
             if not self.ios.exists('/'.join([self.documents_folder, path])):
@@ -591,14 +599,20 @@ if True:
 
             base = tdir
             if iswindows:
+                from calibre.utils.filenames import shorten_components_to
                 plen = len(base)
-                name = ''.join(shorten_components_to(245-plen, [path]))
-            with open(os.path.join(base, path), 'wb') as out:
+                bfn = path.split('/')[-1]
+                dest = ''.join(shorten_components_to(245-plen, [bfn]))
+            else:
+                dest = path
+
+            out_path = os.path.normpath(os.path.join(base, sanitize_file_name(dest)))
+            with open(out_path, 'wb') as out:
                 try:
                     self.get_file(path, out)
                 except Exception as e:
                     import traceback
-                    ans.append((path, e, traceback.format_exc()))
+                    ans.append((dest, e, traceback.format_exc()))
                 else:
                     ans.append(out.name)
 
@@ -620,6 +634,14 @@ if True:
                 if bl_book.path == path:
                     self._log("matched path: %s" % repr(bl_book.path))
                     booklists[0].pop(i)
+
+    def shutdown(self):
+        '''
+        If silent switch goodreader_caching_disabled is true, remove remote cached
+        '''
+        if self.prefs.get('goodreader_caching_disabled', False):
+            self._log_location("deleting remote metadata cache")
+            self.ios.remove(str(self.remote_metadata))
 
     def sync_booklists(self, booklists, end_session=True):
         '''
@@ -758,9 +780,6 @@ if True:
         '''
         from PIL import Image as PILImage
 
-        COVER_WIDTH = 180
-        COVER_HEIGHT = 270
-
         self._log_location(metadata.title)
 
         thumb = None
@@ -769,7 +788,7 @@ if True:
             self._log("using existing cover")
             try:
                 im = PILImage.open(metadata.cover)
-                im = im.resize((COVER_WIDTH, COVER_HEIGHT), PILImage.ANTIALIAS)
+                im = im.resize((self.COVER_WIDTH, self.COVER_HEIGHT), PILImage.ANTIALIAS)
                 of = cStringIO.StringIO()
                 im.convert('RGB').save(of, 'JPEG')
                 thumb = of.getvalue()
@@ -779,15 +798,15 @@ if True:
                 import traceback
                 traceback.print_exc()
 
-        elif metadata.cover_data is not None:
-            #self._log(repr(metadata.cover_data))
+        elif metadata.cover_data[1] is not None:
+            self._log(repr(metadata.cover_data))
             self._log("generating cover from cover_data")
             try:
                 # Resize for local thumb
                 img_data = cStringIO.StringIO(metadata.cover_data[1])
                 im = PILImage.open(img_data)
                 #im = PILImage.fromstring("RGBA", (180,270), str(metadata.cover_data[1]))
-                im = im.resize((COVER_WIDTH, COVER_HEIGHT), PILImage.ANTIALIAS)
+                im = im.resize((self.COVER_WIDTH, self.COVER_HEIGHT), PILImage.ANTIALIAS)
                 of = cStringIO.StringIO()
                 im.convert('RGB').save(of, 'JPEG')
                 thumb = of.getvalue()
@@ -862,10 +881,73 @@ if True:
         this_book.datetime = datetime.fromtimestamp(cached_book[b'dateadded']).timetuple()
         this_book.path = cached_book[b'filename']
         this_book.size = cached_book[b'size']
-        this_book.thumbnail = base64.b64decode(cached_book[b'thumb_data'])
+        if cached_book[b'thumb_data']:
+            this_book.thumbnail = base64.b64decode(cached_book[b'thumb_data'])
+        else:
+            this_book.thumbnail = None
         this_book.title_sort = cached_book[b'title_sort']
         this_book.uuid = cached_book[b'uuid']
         return this_book
+
+    def _get_goodreader_thumb(self, remote_path):
+        '''
+        remote_path is relative to /Documents
+        GoodReader caches small thumbs of book covers. If we didn't send the book, fetch
+        the cached copy from the iDevice. These thumbs will be scaled up to the size we
+        use when sending from calibre for consistency.
+        '''
+        from PIL import Image as PILImage
+        from calibre import fit_image
+
+        def _build_local_path():
+            '''
+            GoodReader stores individual dbs for each book, matching the folder and
+            name structure in the Documents folder. Make a local version, renamed to .db
+            '''
+            path = remote_db_path.split('/')[-1]
+            if iswindows:
+                from calibre.utils.filenames import shorten_components_to
+                plen = len(self.temp_dir)
+                path = ''.join(shorten_components_to(245-plen, [path]))
+
+            full_path = os.path.join(self.temp_dir, path)
+            base = os.path.splitext(full_path)[0]
+            full_path = base + ".db"
+            return os.path.normpath(full_path)
+
+        self._log_location(remote_path)
+        remote_db_path = '/'.join(['/Library','Application Support', 'com.goodiware.GoodReader.ASRoot',
+                                   'Previews', '0', remote_path])
+
+        thumb_data = None
+
+        db_stats = self.ios.stat(remote_db_path)
+        if db_stats:
+            full_path = _build_local_path()
+            with open(full_path, 'wb') as out:
+                self.ios.copy_from_idevice(remote_db_path, out)
+            local_db_path = out.name
+            con = sqlite3.connect(local_db_path)
+            with con:
+                con.row_factory = sqlite3.Row
+                cur = con.cursor()
+                cur.execute('''SELECT
+                                thumb
+                               FROM Pages WHERE pageNum = "1"
+                            ''')
+                row = cur.fetchone()
+                if row:
+                    img_data = cStringIO.StringIO(row[b'thumb'])
+                    im = PILImage.open(img_data)
+                    scaled, width, height = fit_image(im.size[0], im.size[1], self.COVER_WIDTH, self.COVER_HEIGHT)
+                    im = im.resize((self.COVER_WIDTH, self.COVER_HEIGHT), PILImage.NEAREST)
+                    thumb = cStringIO.StringIO()
+                    im.convert('RGB').save(thumb, 'JPEG')
+                    thumb_data = thumb.getvalue()
+                    thumb.close()
+            os.remove(local_db_path)
+
+        return thumb_data
 
     def _get_metadata(self, book, pdf_stats):
         '''
@@ -873,19 +955,24 @@ if True:
         '''
         from calibre.ebooks.metadata import author_to_author_sort, authors_to_string, title_sort
         from calibre.ebooks.metadata.pdf import get_metadata
-        self._log_location(pdf_stats['path'])
+        self._log_location(repr(book))
 
-        with open(os.path.join(self.temp_dir, pdf_stats['path']), 'rb') as f:
+        pdf_path = os.path.join(self.temp_dir, pdf_stats['path'])
+        with open(pdf_path, 'rb') as f:
             stream = cStringIO.StringIO(f.read())
-        mi = get_metadata(stream)
+
+        mi = get_metadata(stream, cover=False)
         this_book = Book(mi.title, ' & '.join(mi.authors))
         this_book.author_sort = author_to_author_sort(mi.authors[0])
         this_book.datetime = datetime.fromtimestamp(int(pdf_stats['stats']['st_birthtime'])).timetuple()
         this_book.dateadded = int(pdf_stats['stats']['st_birthtime'])
         this_book.path = book
         this_book.size = int(pdf_stats['stats']['st_size'])
-        this_book.thumbnail = self._cover_to_thumb(mi)
-        this_book.thumb_data = base64.b64encode(this_book.thumbnail)
+        this_book.thumbnail = self._get_goodreader_thumb(book)
+        if this_book.thumbnail:
+            this_book.thumb_data = base64.b64encode(this_book.thumbnail)
+        else:
+            this_book.thumb_data = None
         this_book.title_sort = title_sort(mi.title)
         this_book.uuid = None
 
