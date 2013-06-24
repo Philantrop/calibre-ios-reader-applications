@@ -639,8 +639,9 @@ if True:
         '''
         If silent switch goodreader_caching_disabled is true, remove remote cached
         '''
+        self._log_location()
         if self.prefs.get('goodreader_caching_disabled', False):
-            self._log_location("deleting remote metadata cache")
+            self._log("deleting remote metadata cache")
             self.ios.remove(str(self.remote_metadata))
 
     def sync_booklists(self, booklists, end_session=True):
@@ -677,21 +678,22 @@ if True:
                                    FROM metadata
                                    WHERE filename = {}
                                 '''.format(json.dumps(book.path)))
-                    cached_book = cur.fetchall()[0]
-                    if (book.title != cached_book[b'title'] or
-                        book.authors != [cached_book[b'authors']]):
-                        self._log("updating metadata for %s" % repr(book.path))
-                        cur.execute('''UPDATE metadata
-                                       SET authors = "{0}",
-                                           author_sort = "{1}",
-                                           title = "{2}",
-                                           title_sort = "{3}"
-                                       WHERE filename = {4}
-                                    '''.format(self._escape_delimiters(' & '.join(book.authors)),
-                                               self._escape_delimiters(author_to_author_sort(book.authors[0])),
-                                               self._escape_delimiters(book.title),
-                                               self._escape_delimiters(title_sort(book.title)),
-                                               json.dumps(book.path)))
+                    cached_book = cur.fetchone()
+                    if cached_book:
+                        if (book.title != cached_book[b'title'] or
+                            book.authors != [cached_book[b'authors']]):
+                            self._log("updating metadata for %s" % repr(book.path))
+                            cur.execute('''UPDATE metadata
+                                           SET authors = "{0}",
+                                               author_sort = "{1}",
+                                               title = "{2}",
+                                               title_sort = "{3}"
+                                           WHERE filename = {4}
+                                        '''.format(self._escape_delimiters(' & '.join(book.authors)),
+                                                   self._escape_delimiters(author_to_author_sort(book.authors[0])),
+                                                   self._escape_delimiters(book.title),
+                                                   self._escape_delimiters(title_sort(book.title)),
+                                                   json.dumps(book.path)))
 
                 con.commit()
 
@@ -945,7 +947,6 @@ if True:
                     im.convert('RGB').save(thumb, 'JPEG')
                     thumb_data = thumb.getvalue()
                     thumb.close()
-            os.remove(local_db_path)
 
         return thumb_data
 
