@@ -210,8 +210,8 @@ if True:
             cached_books = {}
 
             # Fetch current metadata from Marvin's DB
-            db_profile = self._localize_database_path(self.books_subpath)
-            con = sqlite3.connect(db_profile['path'])
+            local_db_path = self._localize_database_path(self.books_subpath)
+            con = sqlite3.connect(local_db_path)
 
             with con:
                 con.row_factory = sqlite3.Row
@@ -1438,7 +1438,8 @@ if True:
             self._log_location("'%s' not found" % remote_db_path)
             raise DatabaseNotFoundException
 
-        return {'path': local_db_path, 'stats': db_stats}
+        self.local_db_path = local_db_path
+        return local_db_path
 
     def _remove_existing_copy(self, path, metadata):
         '''
