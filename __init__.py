@@ -36,11 +36,11 @@ from calibre.ptempfile import PersistentTemporaryDirectory
 from calibre.utils.config import config_dir, JSONConfig
 from calibre.utils.zipfile import ZipFile
 
-from PyQt4.Qt import QDialog, QIcon, QPixmap
+from PyQt4.Qt import QDialog, QIcon, QObject, QPixmap, pyqtSignal
 from PyQt4.uic import compileUi
 
 # Import glue from plugin if between calibre versions with glue updates
-if False:
+if True:
     # To enable, bundle a current copy of libimobiledevice.py, parse_xml.py in iOS_reader_applications folder
     # Disable import of XmlPropertyListParser in local copy of libimobiledevice.py (#24), replace with
     # from calibre_plugins.ios_reader_apps.parse_xml import XmlPropertyListParser
@@ -438,8 +438,9 @@ class iOSReaderApp(DriverBase):
         _PRODUCT_ID.add(0x12a6)     # iPad3 GSM
         _BCD.add(0x330)
 
-        _PRODUCT_ID.add(0x12ab)     # iPad4 WiFi
-        _BCD.add(0x340)
+        _PRODUCT_ID.add(0x12ab)     # iPad4
+        _BCD.add(0x340)             # WiFi
+        _BCD.add(0x360)             # GSM (Telstra AU)
 
     '''     iPad  Mini     '''
     if True:
@@ -701,7 +702,6 @@ class iOSReaderApp(DriverBase):
             else:
                 self._log("No preferred reader app selected in config")
                 self.ios_reader_app = None
-
 
         # Device connected, app installed
         if self.app_id is not None and self.ios_reader_app is not None:
@@ -1127,3 +1127,12 @@ class iOSReaderApp(DriverBase):
             func=sys._getframe(1).f_code.co_name,
             arg1=arg1, arg2=arg2))
 
+
+class ReaderAppSignals(QObject):
+    '''
+    This class allows the device driver to emit signals to subscribed plugins.
+    '''
+    # This signal is emitted after I/O operations indicating content on the connected
+    # device may have changed. See Marvin_overlays:initialize_overlay() and
+    # _wait_for_command_completion() for typical usage.
+    reader_app_content_changed = pyqtSignal(str)

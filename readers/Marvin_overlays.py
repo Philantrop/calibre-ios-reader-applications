@@ -16,7 +16,7 @@ from calibre.utils.config import prefs
 from calibre.utils.icu import sort_key
 from calibre.utils.zipfile import ZipFile
 
-from calibre_plugins.ios_reader_apps import Book, BookList, iOSReaderApp
+from calibre_plugins.ios_reader_apps import Book, BookList, iOSReaderApp, ReaderAppSignals
 
 if True:
     '''
@@ -29,6 +29,7 @@ if True:
         General initialization that would have occurred in __init__()
         '''
         from calibre.ptempfile import PersistentTemporaryDirectory
+        from PyQt4.QtCore import pyqtSignal
 
         self._log_location(self.ios_reader_app)
 
@@ -97,6 +98,8 @@ if True:
         else:
             self._log("existing thumb cache at '%s'" % self.archive_path)
 
+        # ~~~~~~~~~ Create a device signal class for Marvin Manager ~~~~~~~~~
+        self.marvin_device_signals = ReaderAppSignals()
 
     def add_books_to_metadata(self, locations, metadata, booklists):
         '''
@@ -374,6 +377,10 @@ if True:
 
         if DEBUG_CAN_HANDLE:
             self._log_location(_show_current_connection())
+
+        # Wait for other users of connection to finish
+        while self.busy:
+            time.sleep(0.05)
 
         # Set a flag so eject doesn't interrupt communication with iDevice
         self.busy = True
@@ -1769,7 +1776,7 @@ if True:
 
         return metadata_x
 
-    def _wait_for_command_completion(self, command_name):
+    def _wait_for_command_completion(self, command_name, send_signal=True):
         '''
         Wait for Marvin to issue progress reports via status.xml
         Marvin creates status.xml upon receiving command, increments <progress>
@@ -1874,6 +1881,10 @@ if True:
 
         if self.report_progress is not None:
             self.report_progress(1.0, _('finished'))
+
+        # Emit a signal for Marvin Manager
+        if send_signal:
+            self.marvin_device_signals.reader_app_content_changed.emit(command_name)
 
     def _watchdog_timed_out(self):
         '''
