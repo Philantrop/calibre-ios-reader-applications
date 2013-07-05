@@ -404,7 +404,7 @@ class iOSReaderApp(DriverBase):
     supported_platforms = ['linux', 'osx', 'windows']
     temp_dir = None
     verbose = None
-    version = (1, 0, 4)
+    version = (1, 0, 5)
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -1135,4 +1135,4 @@ class ReaderAppSignals(QObject):
     # This signal is emitted after I/O operations indicating content on the connected
     # device may have changed. See Marvin_overlays:initialize_overlay() and
     # _wait_for_command_completion() for typical usage.
-    reader_app_content_changed = pyqtSignal(str)
+    reader_app_status_changed = pyqtSignal(str)

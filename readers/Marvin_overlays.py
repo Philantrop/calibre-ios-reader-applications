@@ -54,6 +54,7 @@ if True:
         </manifest>
         </{0}>'''
 
+        self.DEBUG_CAN_HANDLE = self.prefs.get('debug_can_handle', False)
         self.DEVICE_PLUGBOARD_NAME = 'MARVIN'
 
         # Height for thumbnails on the device
@@ -61,12 +62,13 @@ if True:
         self.WANTS_UPDATED_THUMBNAILS = True
 
         # ~~~~~~~~~ Variables ~~~~~~~~~
+        self.__busy = False
+        self.__reconnect_request = False
 
         # Initialize the IO components with iOS path separator
         self.staging_folder = '/'.join(['/Library', 'calibre'])
 
         self.books_subpath = '/Library/mainDb.sqlite'
-        self.busy = False
         self.connected_fs = '/'.join([self.staging_folder, 'connected.xml'])
         self.flags = {
             'new': 'NEW',
@@ -373,36 +375,43 @@ if True:
 
         # ~~~ Entry point ~~~
 
-        DEBUG_CAN_HANDLE = False
 
-        if DEBUG_CAN_HANDLE:
+
+        if self.DEBUG_CAN_HANDLE:
             self._log_location(_show_current_connection())
 
         # Wait for other users of connection to finish
-        while self.busy:
+        while self.__busy:
             time.sleep(0.05)
 
-        # Set a flag so eject doesn't interrupt communication with iDevice
-        self.busy = True
+        self.__busy = True
+
+        # 0: If pending reconnect_request, return False to disconnect/reconnect driver
+        if self.__reconnect_request:
+            if self.DEBUG_CAN_HANDLE:
+                self._log("reconnecting…")
+            self.__reconnect_request = False
+            self.__busy = False
+            return False
 
         # 0: If we've already discovered a connected device without Marvin, exit
         if self.ios_connection['udid'] and self.ios_connection['app_installed'] is False:
-            if DEBUG_CAN_HANDLE:
+            if self.DEBUG_CAN_HANDLE:
                 self._log("self.ios_connection['udid']: %s" % self.ios_connection['udid'])
                 self._log("self.ios_connection['app_installed']: %s" % self.ios_connection['app_installed'])
                 self._log("0: returning %s" % self.ios_connection['app_installed'])
-            self.busy = False
+            self.__busy = False
             return self.ios_connection['app_installed']
 
         # 0. If user ejected, exit
         if self.ios_connection['udid'] and self.ejected is True:
-            if DEBUG_CAN_HANDLE:
+            if self.DEBUG_CAN_HANDLE:
                 self._log("'%s' ejected" % self.ios_connection['device_name'])
-            self.busy = False
+            self.__busy = False
             return False
 
         # 1: Is there a (single) connected iDevice?
-        if False and DEBUG_CAN_HANDLE:
+        if False and self.DEBUG_CAN_HANDLE:
             self._log("1. self.ios_connection: %s" % _show_current_connection())
 
         connected_ios_devices = self.ios.get_device_list()
@@ -423,21 +432,21 @@ if True:
                     connection_state = connection.find('state').text
                     if connection_state == 'online':
                         connection_live = True
-                        if DEBUG_CAN_HANDLE:
+                        if self.DEBUG_CAN_HANDLE:
                             self._log("1a. <state> = online")
                     else:
                         connection_live = False
-                        if DEBUG_CAN_HANDLE:
+                        if self.DEBUG_CAN_HANDLE:
                             self._log("1b. <state> = offline")
 
                     # Show the connection initiation time
                     self.connection_timestamp = float(connection.get('timestamp'))
                     d = datetime.fromtimestamp(self.connection_timestamp)
-                    if DEBUG_CAN_HANDLE:
+                    if self.DEBUG_CAN_HANDLE:
                         self._log("   connection last refreshed %s" % (d.strftime('%Y-%m-%d %H:%M:%S')))
 
                 else:
-                    if DEBUG_CAN_HANDLE:
+                    if self.DEBUG_CAN_HANDLE:
                         self._log("1c. user exited connection mode")
 
                 if not connection_live:
@@ -445,32 +454,32 @@ if True:
                     #self._reset_ios_connection(udid=connected_ios_devices[0])
                     self.ios_connection['connected'] = False
 
-                if DEBUG_CAN_HANDLE:
+                if self.DEBUG_CAN_HANDLE:
                     self._log("1d: returning %s" % connection_live)
-                self.busy = False
+                self.__busy = False
                 return connection_live
 
             elif self.ios_connection['udid'] != connected_ios_devices[0]:
-                self._reset_ios_connection(udid=connected_ios_devices[0], verbose=DEBUG_CAN_HANDLE)
+                self._reset_ios_connection(udid=connected_ios_devices[0], verbose=self.DEBUG_CAN_HANDLE)
 
             # 2. Is Marvin installed on this iDevice?
             if not self.ios_connection['app_installed']:
-                if DEBUG_CAN_HANDLE:
+                if self.DEBUG_CAN_HANDLE:
                     self._log("2. Marvin installed, attempting connection")
                 self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_id=self.app_id)
                 self.ios_connection['device_name'] = self.ios.device_name
-                if DEBUG_CAN_HANDLE:
+                if self.DEBUG_CAN_HANDLE:
                     self._log("2a. self.ios_connection: %s" % _show_current_connection())
 
                 # If no Marvin, we can't handle, so exit
                 if not self.ios_connection['app_installed']:
-                    if DEBUG_CAN_HANDLE:
+                    if self.DEBUG_CAN_HANDLE:
                         self._log("2. Marvin not installed")
-                    self.busy = False
+                    self.__busy = False
                     return self.ios_connection['app_installed']
 
             # 3. Check to see if connected.xml exists in staging folder
-            if DEBUG_CAN_HANDLE:
+            if self.DEBUG_CAN_HANDLE:
                 self._log("3. Looking for calibre connection mode")
 
             connection_live = False
@@ -480,24 +489,24 @@ if True:
                 connection_state = connection.find('state').text
                 if connection_state == 'online':
                     connection_live = True
-                    if DEBUG_CAN_HANDLE:
+                    if self.DEBUG_CAN_HANDLE:
                         self._log("3a. <state> = online")
                 else:
                     connection_live = False
-                    if DEBUG_CAN_HANDLE:
+                    if self.DEBUG_CAN_HANDLE:
                         self._log("3b. <state> = offline")
 
                 # Show the connection initiation time
                 self.connection_timestamp = float(connection.get('timestamp'))
                 d = datetime.fromtimestamp(self.connection_timestamp)
-                if DEBUG_CAN_HANDLE:
+                if self.DEBUG_CAN_HANDLE:
                     self._log("   connection last refreshed %s" % (d.strftime('%Y-%m-%d %H:%M:%S')))
 
                 self.ios_connection['connected'] = connection_live
 
             else:
                 self.ios_connection['connected'] = False
-                if DEBUG_CAN_HANDLE:
+                if self.DEBUG_CAN_HANDLE:
                     self._log("3d. Marvin not in calibre connection mode")
 
         elif len(connected_ios_devices) == 0:
@@ -513,10 +522,15 @@ if True:
             self.ios.disconnect_idevice()
 
         # 4. show connection
-        if DEBUG_CAN_HANDLE:
+        if self.DEBUG_CAN_HANDLE:
             self._log("4. self.ios_connection: %s" % _show_current_connection())
 
-        self.busy = False
+        self.__busy = False
+
+        # Signal MM if disconnected
+        if not self.ios_connection['connected']:
+            self.marvin_device_signals.reader_app_status_changed.emit("disconnected")
+
         return self.ios_connection['connected']
 
     def can_handle_windows(self, device_info, debug=False):
@@ -560,6 +574,9 @@ if True:
         # Wait for completion
         self._wait_for_command_completion(command_name)
 
+        # Update local copy of mainDb
+        self._localize_database_path(self.books_subpath)
+
     def eject(self):
         '''
         Unmount/eject the device
@@ -568,9 +585,12 @@ if True:
         self._log_location()
 
         # If busy in critical IO operation, wait for completion before returning
-        while self.busy:
+        while self.__busy:
             time.sleep(0.10)
         self.ejected = True
+
+    def get_busy_flag(self):
+        return self.__busy
 
     def get_file(self, path, outfile, end_session=True):
         '''
@@ -580,6 +600,9 @@ if True:
         '''
         self._log_location()
         self.ios.copy_from_idevice('/'.join(['Documents', path]), outfile)
+
+    def get_reconnect_request(self):
+        return self.__reconnect_request
 
     def is_usb_connected(self, devices_on_system, debug=False, only_presence=False):
         '''
@@ -734,7 +757,7 @@ if True:
         '''
         self._log_location()
         self.ios_connection['connected'] = False
-        #self.ios.disconnect_idevice()
+        self.marvin_device_signals.reader_app_status_changed.emit("yanked")
 
     def prepare_addable_books(self, paths):
         '''
@@ -814,6 +837,12 @@ if True:
                                 (self.cached_books[path]['title'],
                                  self.cached_books[path]['author'],
                                  self.cached_books[path]['uuid']))
+
+    def set_busy_flag(self, value):
+        self.__busy = value
+
+    def set_reconnect_request(self, value):
+        self.__reconnect_request = value
 
     def sync_booklists(self, booklists, end_session=True):
         '''
@@ -1258,6 +1287,9 @@ if True:
 
             # Wait for completion
             self._wait_for_command_completion("upload_books")
+
+            # Update local copy of mainDb
+            self._localize_database_path(self.books_subpath)
 
         # Perform metadata updates
         if self.metadata_updates:
@@ -1884,7 +1916,7 @@ if True:
 
         # Emit a signal for Marvin Manager
         if send_signal:
-            self.marvin_device_signals.reader_app_content_changed.emit(command_name)
+            self.marvin_device_signals.reader_app_status_changed.emit(command_name)
 
     def _watchdog_timed_out(self):
         '''
