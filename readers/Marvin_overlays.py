@@ -272,14 +272,18 @@ if True:
                     this_book.description = row[b'Description']
                     this_book.device_collections = _get_marvin_collections(cur, book_id, row)
                     this_book.path = row[b'FileName']
-                    try:
-                        _pubdate = datetime.fromtimestamp(int(row[b'DatePublished']))
-                    except:
-                        _pubdate = datetime.fromtimestamp(0)
-                    this_book.pubdate = strftime('%Y-%m-%d', t=_pubdate)
 
-                    # Inspect the incoming timestamp more closely
-                    #self._log("%s %s" % (row[b'Title'], strftime('%Y-%m-%d %H:%M:%S %z', t=_pubdate)))
+#                     try:
+#                         _pubdate = datetime.fromtimestamp(int(row[b'DatePublished']))
+#                     except:
+#                         _pubdate = datetime.fromtimestamp(0)
+#                     this_book.pubdate = strftime('%Y-%m-%d', t=_pubdate)
+                    try:
+                        pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
+                        pubdate = pubdate.replace(hour=0, minute=0, second=0)
+                    except:
+                        pubdate = None
+                    this_book.pubdate = pubdate
 
                     this_book.publisher = row[b'Publisher']
                     this_book.series = row[b'CalibreSeries']
@@ -334,7 +338,7 @@ if True:
                 for book in self.cached_books:
                     self._log("{0:30} {1:42} {2} {3} {4}".format(
                         repr(self.cached_books[book]['title'][0:26]),
-                        repr(self.cached_books[book]['uuid']),
+                        repr(self.cached_books[book]['pubdate']),
                         repr(self.cached_books[book]['authors']),
                         repr(self.cached_books[book]['device_collections']),
                         repr(book)))
@@ -379,10 +383,6 @@ if True:
 
         if self.DEBUG_CAN_HANDLE:
             self._log_location(_show_current_connection())
-
-        # Wait for other users of connection to finish
-        while self.__busy:
-            time.sleep(0.05)
 
         self.__busy = True
 
@@ -932,6 +932,7 @@ if True:
                     metadata_updated = True
 
                 # ~~~~~~~~~~ pubdate ~~~~~~~~~~
+                # This is probably broken. See Marvin_Manager:book_status #1588
                 if self.cached_books[filename]['pubdate'] != strftime('%Y-%m-%d', t=book.pubdate):
                     self._log("%s (%s)" % (book.title, book.in_library))
                     self._log(" pubdate: (device) %s != (library) %s" %
@@ -1288,18 +1289,19 @@ if True:
             # Wait for completion
             self._wait_for_command_completion("upload_books")
 
-            # Update local copy of mainDb
-            self._localize_database_path(self.books_subpath)
-
         # Perform metadata updates
         if self.metadata_updates:
             self._log("Sending metadata updates")
 
             # Copy the command file to the staging folder
-            self._stage_command_file("update_metadata", update_soup, show_command=self.prefs.get('development_mode', False))
+            self._stage_command_file("update_metadata", update_soup,
+                show_command=self.prefs.get('development_mode', False))
 
             # Wait for completion
             self._wait_for_command_completion("update_metadata")
+
+        # Update local copy of mainDb
+        self._localize_database_path(self.books_subpath)
 
         if (self.malformed_books or self.skipped_books or
             self.metadata_updates or self.replaced_books):
@@ -1377,7 +1379,8 @@ if True:
 
         this_book.format = format
         this_book.path = self.path_template.format(metadata.uuid)
-        this_book.pubdate = strftime("%Y-%m-%d", t=metadata_x.pubdate)
+        #this_book.pubdate = strftime("%Y-%m-%d", t=metadata_x.pubdate)
+        this_book.pubdate = metadata_x.pubdate
         this_book.publisher = metadata_x.publisher
         this_book.series = metadata_x.series
         this_book.series_index = metadata_x.series_index
@@ -1622,7 +1625,9 @@ if True:
         book_tag['author'] = escape(', '.join(book.authors))
         book_tag['authorsort'] = escape(book.author_sort)
         book_tag['filename'] = escape(target_epub)
-        book_tag['pubdate'] = strftime('%Y-%m-%d', t=book.pubdate)
+
+        naive = book.pubdate.replace(hour=0, minute=0, second=0, tzinfo=None)
+        book_tag['pubdate'] = strftime('%Y-%m-%d', t=naive)
         book_tag['publisher'] = ''
         if book.publisher is not None:
             book_tag['publisher'] = escape(book.publisher)

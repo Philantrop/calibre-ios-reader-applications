@@ -1,5 +1,4 @@
 #!/usr/bin/env python
-#!/usr/bin/env python
 # coding: utf-8
 
 from __future__ import (unicode_literals, division, absolute_import,
@@ -59,7 +58,7 @@ class EnabledCollectionsListWidget(QListWidget):
 
 class PluginWidget(QWidget, Ui_Form):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
-    TITLE = _('Marvin Options')
+    TITLE = 'Marvin Options'
 
     def __init__(self, parent):
         QWidget.__init__(self, parent=None)
