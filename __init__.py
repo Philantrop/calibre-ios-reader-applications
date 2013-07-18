@@ -610,6 +610,15 @@ class iOSReaderApp(DriverBase):
                     os.makedirs(os.path.dirname(fs))
                 with open (fs, 'wb') as f:
                     f.write(ir[icon])
+            else:
+                # Is the icon file current?
+                update_needed = False
+                with open(fs, 'rb') as f:
+                    if f.read() != ir[icon]:
+                        update_needed = True
+                    if update_needed:
+                        with open(fs, 'wb') as f:
+                            f.write(ir[icon])
 
         # ~~~~~~~~~ Copy the widget files to our resource directory ~~~~~~~~~
         widgets = []

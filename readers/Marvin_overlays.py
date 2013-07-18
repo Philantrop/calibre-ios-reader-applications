@@ -566,6 +566,7 @@ if True:
                 command_soup.manifest.insert(i, book_tag)
             else:
                 self._log("trying to delete book not in cache '%s'" % path)
+                self._log("cached_paths:\n%s" % self.cached_books.keys())
                 continue
 
         # Copy the command file to the staging folder
@@ -806,7 +807,7 @@ if True:
         NB: This will not find books that were added by a different installation of calibre
             as uuids are different
         '''
-        self._log_location()
+        self._log_location(paths)
         for path in paths:
             for i, bl_book in enumerate(booklists[0]):
                 found = False
