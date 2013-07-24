@@ -440,6 +440,7 @@ class iOSReaderApp(DriverBase):
 
         _PRODUCT_ID.add(0x12ab)     # iPad4
         _BCD.add(0x340)             # WiFi
+        _BCD.add(0x350)             # GSM (ME401LL/A)
         _BCD.add(0x360)             # GSM (Telstra AU)
 
     '''     iPad  Mini     '''

@@ -63,7 +63,6 @@ if True:
 
         # ~~~~~~~~~ Variables ~~~~~~~~~
         self.__busy = False
-        self.__reconnect_request = False
 
         # Initialize the IO components with iOS path separator
         self.staging_folder = '/'.join(['/Library', 'calibre'])
@@ -379,20 +378,10 @@ if True:
 
         # ~~~ Entry point ~~~
 
-
-
         if self.DEBUG_CAN_HANDLE:
             self._log_location(_show_current_connection())
 
         self.__busy = True
-
-        # 0: If pending reconnect_request, return False to disconnect/reconnect driver
-        if self.__reconnect_request:
-            if self.DEBUG_CAN_HANDLE:
-                self._log("reconnecting…")
-            self.__reconnect_request = False
-            self.__busy = False
-            return False
 
         # 0: If we've already discovered a connected device without Marvin, exit
         if self.ios_connection['udid'] and self.ios_connection['app_installed'] is False:
@@ -601,9 +590,6 @@ if True:
         '''
         self._log_location()
         self.ios.copy_from_idevice('/'.join(['Documents', path]), outfile)
-
-    def get_reconnect_request(self):
-        return self.__reconnect_request
 
     def is_usb_connected(self, devices_on_system, debug=False, only_presence=False):
         '''
@@ -841,9 +827,6 @@ if True:
 
     def set_busy_flag(self, value):
         self.__busy = value
-
-    def set_reconnect_request(self, value):
-        self.__reconnect_request = value
 
     def sync_booklists(self, booklists, end_session=True):
         '''
