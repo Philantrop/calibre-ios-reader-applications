@@ -404,7 +404,7 @@ class iOSReaderApp(DriverBase):
     supported_platforms = ['linux', 'osx', 'windows']
     temp_dir = None
     verbose = None
-    version = (1, 0, 5)
+    version = (1, 0, 6)
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
