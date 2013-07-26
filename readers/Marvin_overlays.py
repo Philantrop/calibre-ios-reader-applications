@@ -1387,7 +1387,7 @@ if True:
         if verbose:
             self._log_location(mi.title)
 
-        collection_fields = self.prefs.get('marvin_enabled_collection_fields', [])
+        collection_fields = list(self.prefs.get('marvin_collection_field', ''))
 
         # Build a map of name:field for eligible custom fields
         eligible_custom_fields = {}
@@ -1659,7 +1659,7 @@ if True:
         # Add the collections
         # If no custom column(s) for collections, preserve existing Marvin collection assignments
         # JSON switch 'marvin_merge_collections' controls whether to merge or replace existing collections
-        collection_fields = self.prefs.get('marvin_enabled_collection_fields', [])
+        collection_fields = list(self.prefs.get('marvin_collection_field', ''))
         if collection_fields:
             if self.prefs.get('marvin_merge_collections', True):
                 # Append calibre collection assignments to existing Marvin collections, with existing flags

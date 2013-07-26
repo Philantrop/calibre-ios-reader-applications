@@ -8,7 +8,8 @@ __license__ = 'GPL v3'
 __copyright__ = '2010, Gregory Riker'
 __docformat__ = 'restructuredtext en'
 
-import os, sys
+import os, importlib, sys
+from functools import partial
 from urllib2 import FileHandler
 
 from calibre.gui2 import open_url, warning_dialog
@@ -26,39 +27,9 @@ if True:
     sys.path.remove(widget_path)
 
 
-class EnabledCollectionsListWidget(QListWidget):
-    def __init__(self, parent=None):
-        QListWidget.__init__(self, parent)
-        self.parent = parent
-        self.setSelectionBehavior(QAbstractItemView.SelectRows)
-        self.setSelectionMode(QAbstractItemView.SingleSelection)
-        self.populate()
-
-    def populate(self):
-        self.clear()
-        enabled_collection_fields = self.parent.prefs.get('marvin_enabled_collection_fields', [])
-        for name in self.parent.eligible_custom_fields:
-            item = QListWidgetItem(name, self)
-            item.setData(Qt.UserRole, QVariant(name))
-            if name in enabled_collection_fields:
-                item.setCheckState(Qt.Checked)
-            else:
-                item.setCheckState(Qt.Unchecked)
-            self.addItem(item)
-
-    def get_enabled_items(self):
-        enabled_items = []
-        for x in xrange(self.count()):
-            item = self.item(x)
-            if item.checkState() == Qt.Checked:
-                key = unicode(item.data(Qt.UserRole).toString()).strip()
-                enabled_items.append(key)
-        return enabled_items
-
-
 class PluginWidget(QWidget, Ui_Form):
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
-    TITLE = 'Marvin Options'
+    TITLE = 'Marvin options'
 
     def __init__(self, parent):
         QWidget.__init__(self, parent=None)
@@ -68,6 +39,12 @@ class PluginWidget(QWidget, Ui_Form):
         self.prefs = parent.prefs
         self.verbose = parent.verbose
         self._log_location()
+
+    def collections_selection_changed(self, value):
+        '''
+        '''
+        cf = str(self.collections_comboBox.currentText())
+        self.prefs.set('marvin_collection_field', cf)
 
     def initialize(self, name):
         '''
@@ -93,18 +70,71 @@ class PluginWidget(QWidget, Ui_Form):
         for cf in self.gui.current_db.custom_field_keys():
             cft = self.gui.current_db.metadata_for_field(cf)['datatype']
             cfn = self.gui.current_db.metadata_for_field(cf)['name']
+            cfim = self.gui.current_db.metadata_for_field(cf)['is_multiple']
             #self._log("%s: %s (%s)" % (cf, cfn, cft))
-            if cft in ['enumeration', 'text']:
+            if cft in ['enumeration', 'text'] and bool(cfim):
                 eligible_custom_fields.append(cfn)
         self.eligible_custom_fields = sorted(eligible_custom_fields, key=lambda s: s.lower())
 
-        # Add collections to the layout
-        self.enabled_collections_list = EnabledCollectionsListWidget(self)
-        self.collections_layout.addWidget(self.enabled_collections_list)
+        # Populate Collections comboBox
+        self.collections_comboBox.setToolTip("Custom column for Marvin collections")
+        self.collections_comboBox.addItem('')
+        self.collections_comboBox.addItems(self.eligible_custom_fields)
+        cf = self.prefs.get('marvin_collection_field', None)
+        if cf:
+            idx = self.collections_comboBox.findText(cf)
+            if idx > -1:
+                self.collections_comboBox.setCurrentIndex(idx)
+
+        # Hook changes to Collections
+        self.collections_comboBox.currentIndexChanged.connect(self.collections_selection_changed)
+
+        # Init the wizard toolbutton
+        self.collections_wizard_tb.setIcon(QIcon(I('wizard.png')))
+        self.collections_wizard_tb.setToolTip("Create a custom column for Collections")
+        self.collections_wizard_tb.clicked.connect(partial(self.launch_cc_wizard, 'Collections'))
 
         # Add the Help icon to the help button
         self.help_button.setIcon(QIcon(I('help.png')))
         self.help_button.clicked.connect(self.show_help)
+
+    def launch_cc_wizard(self, column_type):
+        '''
+        '''
+        self._log_location()
+        dialog_resources_path = os.path.join(self.parent.resources_path, 'widgets')
+        klass = os.path.join(dialog_resources_path, 'cc_wizard.py')
+        if os.path.exists(klass):
+            #self._log("importing CC Wizard dialog from '%s'" % klass)
+            sys.path.insert(0, dialog_resources_path)
+            this_dc = importlib.import_module('cc_wizard')
+            sys.path.remove(dialog_resources_path)
+            dlg = this_dc.CustomColumnWizard(self, column_type, verbose=True)
+            dlg.exec_()
+
+            if dlg.modified_column:
+                self._log("modified_column: %s" % dlg.modified_column)
+
+                destination = dlg.modified_column['destination']
+                label = dlg.modified_column['label']
+                previous = dlg.modified_column['previous']
+                source = dlg.modified_column['source']
+
+                if source == 'Collections':
+                    all_items = [str(self.collections_comboBox.itemText(i))
+                                 for i in range(self.collections_comboBox.count())]
+                    if previous and previous in all_items:
+                        all_items.remove(previous)
+                    all_items.append(destination)
+
+                    self.collections_comboBox.clear()
+                    self.collections_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
+                    idx = self.collections_comboBox.findText(destination)
+                    if idx > -1:
+                        self.collections_comboBox.setCurrentIndex(idx)
+
+                    # Save Collection field manually in case user cancels
+                    self.prefs.set('marvin_collection_field', destination)
 
     def options(self):
         '''
@@ -122,7 +152,7 @@ class PluginWidget(QWidget, Ui_Form):
         opts['marvin_edit_collections_cb'] = self.marvin_edit_collections_cb.isChecked()
 
         # Enabled collections
-        opts['marvin_enabled_collection_fields'] = self.enabled_collections_list.get_enabled_items()
+        #opts['marvin_enabled_collection_fields'] = self.prefs.get('marvin_enabled_collection_fields', [])
 
         return opts
 
