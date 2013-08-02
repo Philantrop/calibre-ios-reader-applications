@@ -40,7 +40,7 @@ from PyQt4.Qt import QDialog, QIcon, QObject, QPixmap, pyqtSignal
 from PyQt4.uic import compileUi
 
 # Import glue from plugin if between calibre versions with glue updates
-if True:
+if False:
     # To enable, bundle a current copy of libimobiledevice.py, parse_xml.py in iOS_reader_applications folder
     # Disable import of XmlPropertyListParser in local copy of libimobiledevice.py (#24), replace with
     # from calibre_plugins.ios_reader_apps.parse_xml import XmlPropertyListParser
@@ -398,7 +398,7 @@ class iOSReaderApp(DriverBase):
     format_map = []
     gui_name = 'iOS reader applications'
     icon = None
-    minimum_calibre_version = (0, 9, 37)
+    minimum_calibre_version = (0, 9, 41)
     name = 'iOS reader applications'
     overlays_loaded = False
     supported_platforms = ['linux', 'osx', 'windows']

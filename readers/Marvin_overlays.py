@@ -12,6 +12,7 @@ from lxml import etree, html
 from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.errors import UserFeedback
 from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
+from calibre.gui2 import Application
 from calibre.utils.config import prefs
 from calibre.utils.icu import sort_key
 from calibre.utils.zipfile import ZipFile
@@ -381,6 +382,10 @@ if True:
         if self.DEBUG_CAN_HANDLE:
             self._log_location(_show_current_connection())
 
+        # If another libiMobileDevice client is talking, return True
+        if self.__busy:
+            return True
+
         self.__busy = True
 
         # 0: If we've already discovered a connected device without Marvin, exit
@@ -577,6 +582,7 @@ if True:
         # If busy in critical IO operation, wait for completion before returning
         while self.__busy:
             time.sleep(0.10)
+            Application.processEvents()
         self.ejected = True
 
     def get_busy_flag(self):
@@ -826,6 +832,9 @@ if True:
                                  self.cached_books[path]['uuid']))
 
     def set_busy_flag(self, value):
+        '''
+        Another libiMobileDevice wants to talk to the connected iDevice uninterrupted
+        '''
         self.__busy = value
 
     def sync_booklists(self, booklists, end_session=True):
@@ -1387,7 +1396,8 @@ if True:
         if verbose:
             self._log_location(mi.title)
 
-        collection_fields = list(self.prefs.get('marvin_collection_field', ''))
+        collection_field = self.prefs.get('marvin_collection_field', '')
+        self._log("collection_field: %s" % collection_field)
 
         # Build a map of name:field for eligible custom fields
         eligible_custom_fields = {}
@@ -1395,30 +1405,20 @@ if True:
             if mi.metadata_for_field(cf)['datatype'] in ['enumeration', 'text']:
                 eligible_custom_fields[mi.metadata_for_field(cf)['name'].lower()] = cf
 
-        # Collect the field items for the specified collection fields
+        # Collect the field items for the specified collection field
         field_items = []
-        for field in collection_fields:
-            '''
-            if field.lower() == 'series':
-                if mi.series:
-                    field_items.append(mi.series)
-            elif field.lower() == 'tags':
-                if mi.tags:
-                    for tag in mi.tags:
-                        field_items.append(tag)
-            '''
-            if field.lower() in eligible_custom_fields:
-                value = mi.get(eligible_custom_fields[field.lower()])
-                if value:
-                    if type(value) is list:
-                        field_items += value
-                    elif type(value) in [str, unicode]:
-                        field_items.append(value)
-                    else:
-                        self._log("Unexpected type: '%s'" % type(value))
-            else:
-                self._log_location("'%s': Invalid metadata field specified as collection source: '%s'" %
-                                   (mi.title, field))
+        if collection_field.lower() in eligible_custom_fields:
+            value = mi.get(eligible_custom_fields[collection_field.lower()])
+            if value:
+                if type(value) is list:
+                    field_items += value
+                elif type(value) in [str, unicode]:
+                    field_items.append(value)
+                else:
+                    self._log("Unexpected type: '%s'" % type(value))
+        else:
+            self._log_location("'%s': Invalid metadata field specified as collection source: '%s'" %
+                               (mi.title, collection_field))
 
         # Strip flag value, managed only in Marvin
         flags_to_strip = []
@@ -1428,7 +1428,7 @@ if True:
         for flag in flags_to_strip:
             field_items.remove(flag)
 
-        if verbose:
+        if True or verbose:
             self._log("collections: %s" % field_items)
         return field_items
 
@@ -1824,6 +1824,7 @@ if True:
                     raise UserFeedback("Marvin operation timed out.",
                                         details=None, level=UserFeedback.WARN)
                 time.sleep(0.10)
+                Application.processEvents()
 
             else:
                 watchdog.cancel()
@@ -1866,10 +1867,13 @@ if True:
                             watchdog.cancel()
                             watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
                             watchdog.start()
-                        time.sleep(0.01)
+                        time.sleep(0.10)
+                        Application.processEvents()
 
                     except:
-                        time.sleep(0.01)
+                        time.sleep(0.10)
+                        Application.processEvents()
+
                         self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
 
                 # Command completed
