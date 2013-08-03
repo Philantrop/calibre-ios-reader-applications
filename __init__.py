@@ -314,6 +314,16 @@ class CompileUI():
         return compiled_form
 
 
+class DatabaseMalformedException(Exception):
+    ''' '''
+    pass
+
+
+class DatabaseNotFoundException(Exception):
+    ''' '''
+    pass
+
+
 class DriverBase(DeviceConfig, DevicePlugin):
 
     # Specified at runtime in settings()

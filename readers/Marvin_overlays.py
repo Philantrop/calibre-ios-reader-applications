@@ -17,7 +17,8 @@ from calibre.utils.config import prefs
 from calibre.utils.icu import sort_key
 from calibre.utils.zipfile import ZipFile
 
-from calibre_plugins.ios_reader_apps import Book, BookList, iOSReaderApp, ReaderAppSignals
+from calibre_plugins.ios_reader_apps import (Book, BookList,
+    DatabaseMalformedException, DatabaseNotFoundException, iOSReaderApp, ReaderAppSignals)
 
 if True:
     '''
@@ -236,27 +237,34 @@ if True:
 
                 # Get the books
                 cur = con.cursor()
-                cur.execute('''SELECT
-                                Author,
-                                AuthorSort,
-                                Books.ID as id_,
-                                CalibreCoverHash,
-                                CalibreSeries,
-                                CalibreSeriesIndex,
-                                CalibreTitleSort,
-                                DateAdded,
-                                DatePublished,
-                                Description,
-                                FileName,
-                                IsRead,
-                                NewFlag,
-                                Publisher,
-                                ReadingList,
-                                SmallCoverJpg,
-                                Title,
-                                UUID
-                              FROM Books
-                            ''')
+                try:
+                    cur.execute('''SELECT
+                                    Author,
+                                    AuthorSort,
+                                    Books.ID as id_,
+                                    CalibreCoverHash,
+                                    CalibreSeries,
+                                    CalibreSeriesIndex,
+                                    CalibreTitleSort,
+                                    DateAdded,
+                                    DatePublished,
+                                    Description,
+                                    FileName,
+                                    IsRead,
+                                    NewFlag,
+                                    Publisher,
+                                    ReadingList,
+                                    SmallCoverJpg,
+                                    Title,
+                                    UUID
+                                  FROM Books
+                                ''')
+                except:
+                    cur.close()
+                    # Invalidate local_db_path so Marvin Manager knows
+                    self.local_db_path = None
+                    self.cached_books = {}
+                    raise DatabaseMalformedException("Marvin database is damaged")
 
                 rows = cur.fetchall()
                 book_count = len(rows)
@@ -273,11 +281,6 @@ if True:
                     this_book.device_collections = _get_marvin_collections(cur, book_id, row)
                     this_book.path = row[b'FileName']
 
-#                     try:
-#                         _pubdate = datetime.fromtimestamp(int(row[b'DatePublished']))
-#                     except:
-#                         _pubdate = datetime.fromtimestamp(0)
-#                     this_book.pubdate = strftime('%Y-%m-%d', t=_pubdate)
                     try:
                         pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
                         pubdate = pubdate.replace(hour=0, minute=0, second=0)
@@ -1461,8 +1464,7 @@ if True:
                     self.ios.copy_from_idevice(remote_db_path, out)
                 local_db_path = out.name
         else:
-            self._log_location("'%s' not found" % remote_db_path)
-            raise DatabaseNotFoundException
+            raise DatabaseNotFoundException("'%s' not found" % remote_db_path)
 
         self.local_db_path = local_db_path
         return local_db_path
