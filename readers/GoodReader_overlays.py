@@ -105,16 +105,18 @@ if True:
                             ''')
                 rows = cur.fetchall()
                 cached_books = [row[b'filename'] for row in rows]
+                #cached_books = [json.dumps(row[b'filename']) for row in rows]
                 if self.prefs.get('development_mode', False):
-                    self._log("cached_books:")
+                    self._log("~~~ cached_books: ~~~")
                     for b in sorted(cached_books):
-                        self._log(b)
+                        self._log("%s %s" % (b, repr(b)))
 
                 # Get the currently installed filenames from the documents folder
                 installed_books = self._get_nested_folder_contents(self.documents_folder)
                 if self.prefs.get('development_mode', False):
+                    self._log("~~~ installed_books: ~~~")
                     for b in sorted(installed_books):
-                        self._log(b)
+                        self._log("%s %s" % (b, repr(b)))
 
                 moved_books = []
                 for i, book in enumerate(installed_books):
@@ -676,7 +678,7 @@ if True:
                                     filename,
                                     title
                                    FROM metadata
-                                   WHERE filename = {}
+                                   WHERE filename = {0}
                                 '''.format(json.dumps(book.path)))
                     cached_book = cur.fetchone()
                     if cached_book:
@@ -858,8 +860,9 @@ if True:
     def _get_cached_metadata(self, cur, book):
         '''
         Return a populated Book object from a cached book's metadata
+        format(json.dumps(book)))
         '''
-        self._log_location(json.dumps(book))
+        self._log_location(book)
 
         cur.execute('''
                         SELECT
@@ -873,23 +876,29 @@ if True:
                          title_sort,
                          uuid
                         FROM metadata
-                        WHERE filename = {0}
-                    '''.format(json.dumps(book)))
-        cached_book = cur.fetchall()[0]
-        #self._log(cached_book.keys())
+                        WHERE filename=?
+                    ''', (book, )
+                   )
 
-        this_book = Book(cached_book[b'title'], cached_book[b'authors'])
-        this_book.author_sort = cached_book[b'author_sort']
-        this_book.datetime = datetime.fromtimestamp(cached_book[b'dateadded']).timetuple()
-        this_book.path = cached_book[b'filename']
-        this_book.size = cached_book[b'size']
-        if cached_book[b'thumb_data']:
-            this_book.thumbnail = base64.b64decode(cached_book[b'thumb_data'])
+        cached_book = cur.fetchone()
+        if cached_book:
+            #self._log(cached_book.keys())
+
+            this_book = Book(cached_book[b'title'], cached_book[b'authors'])
+            this_book.author_sort = cached_book[b'author_sort']
+            this_book.datetime = datetime.fromtimestamp(cached_book[b'dateadded']).timetuple()
+            this_book.path = cached_book[b'filename']
+            this_book.size = cached_book[b'size']
+            if cached_book[b'thumb_data']:
+                this_book.thumbnail = base64.b64decode(cached_book[b'thumb_data'])
+            else:
+                this_book.thumbnail = None
+            this_book.title_sort = cached_book[b'title_sort']
+            this_book.uuid = cached_book[b'uuid']
+            return this_book
         else:
-            this_book.thumbnail = None
-        this_book.title_sort = cached_book[b'title_sort']
-        this_book.uuid = cached_book[b'uuid']
-        return this_book
+            self._log("***Error: unable to find '%s' in db" % book)
+            return None
 
     def _get_goodreader_thumb(self, remote_path):
         '''

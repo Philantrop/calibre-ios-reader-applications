@@ -29,28 +29,20 @@ if True:
     sys.path.remove(dialog_resources_path)
 
 class CustomColumnWizard(QDialog, Ui_Dialog):
-    FIELDS = {
-              'Collections': {
-                              'label': 'mm_collections',
-                              'datatype': 'text',
-                              'display': {u'is_names': False},
-                              'is_multiple': True
-                              }
-             }
-
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
     STEP_ONE = "Name your '{0}' column:"
 
     YELLOW_BG = '<font style="background:#FDFF99">{0}</font>'
 
-    def __init__(self, parent, column_type, verbose=True):
+    def __init__(self, parent, column_type, profile, verbose=True):
         QDialog.__init__(self, parent.gui)
         self.column_type = column_type
         self.db = parent.gui.current_db
         self.gui = parent.gui
         self.modified_column = None
         self.previous_name = None
+        self.profile = profile
 
         self.setupUi(self)
         self.verbose = verbose
@@ -147,13 +139,13 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
 
             else:
                 source = self.column_type
-                profile = self.FIELDS[source]
-                profile['source'] = source
+                #profile = self.FIELDS[source]
+                self.profile['source'] = source
                 if button.objectName() == 'add_button':
-                    self.custom_column_add(requested_name, profile)
+                    self.custom_column_add(requested_name, self.profile)
 
                 elif button.objectName() == 'rename_button':
-                    self.custom_column_rename(requested_name, profile)
+                    self.custom_column_rename(requested_name, self.profile)
                 self.accept()
 
         elif self.bb.buttonRole(button) == QDialogButtonBox.RejectRole:
@@ -199,7 +191,8 @@ class CustomColumnWizard(QDialog, Ui_Dialog):
 
         selected = self.column_type
         existing = None
-        label = self.FIELDS[selected]['label']
+        #label = self.FIELDS[selected]['label']
+        label = self.profile['label']
         for cf in self.db.custom_field_keys():
             #self._log(self.db.metadata_for_field(cf))
             cfd = self.db.metadata_for_field(cf)

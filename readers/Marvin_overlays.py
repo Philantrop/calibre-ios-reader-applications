@@ -1231,6 +1231,8 @@ if True:
                 book_tag = Tag(upload_soup, 'book')
                 book_tag['filename'] = this_book.path
                 book_tag['coverhash'] = this_book.cover_hash
+                if this_book.word_count:
+                    book_tag['wordcount'] = this_book.word_count
 
                 # Add <collections> to <book>
                 if this_book.device_collections:
@@ -1384,6 +1386,10 @@ if True:
         this_book.tags = metadata_x.tags
         this_book.thumbnail = thumb
         this_book.title_sort = metadata_x.title_sort
+        this_book.word_count = None
+        wc_lookup = self.prefs.get('marvin_word_count_lookup')
+        if wc_lookup:
+            this_book.word_count = metadata.metadata_for_field("#%s" % wc_lookup)['#value#']
         return this_book
 
     def _get_field_items(self, mi):
@@ -1626,6 +1632,9 @@ if True:
         book_tag['title'] = escape(book.title)
         book_tag['titlesort'] = escape(book.title_sort)
         book_tag['uuid'] = book.uuid
+        wc_lookup = self.prefs.get('marvin_word_count_lookup')
+        if wc_lookup:
+            book_tag['wordcount'] = book.metadata_for_field("#%s" % wc_lookup)['#value#']
 
         # Cover
         cover = book.get('thumbnail')
