@@ -408,7 +408,7 @@ class iOSReaderApp(DriverBase):
     format_map = []
     gui_name = 'iOS reader applications'
     icon = None
-    minimum_calibre_version = (0, 9, 41)
+    minimum_calibre_version = (1, 0, 0)
     name = 'iOS reader applications'
     overlays_loaded = False
     supported_platforms = ['linux', 'osx', 'windows']
