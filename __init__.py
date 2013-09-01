@@ -699,8 +699,7 @@ class iOSReaderApp(DriverBase):
             iOSReaderApp._create_temp_dir('_ios_local_db')
 
         # Init libiMobileDevice
-        self.ios = libiMobileDevice(log=self._log,
-                                    verbose=self.prefs.get('debug_libimobiledevice', False))
+        self.ios = libiMobileDevice(verbose=self.prefs.get('debug_libimobiledevice', False))
 
         # Confirm the installation of the preferred reader app
         self.app_id = None
