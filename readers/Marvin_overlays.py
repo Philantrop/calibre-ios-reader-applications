@@ -70,6 +70,7 @@ if True:
         self.staging_folder = '/'.join(['/Library', 'calibre'])
 
         self.books_subpath = '/Library/mainDb.sqlite'
+        self.covers_subpath = '/Library/Caches/com.appstafarian.marvin.covers'
         self.connected_fs = '/'.join([self.staging_folder, 'connected.xml'])
         self.flags = {
             'new': 'NEW',
@@ -168,6 +169,18 @@ if True:
         '''
         from calibre import strftime
 
+        def _get_marvin_cover(book_hash):
+            '''
+            Given book_hash, retrieve the associated small jpg cover from
+            covers_subpath
+            '''
+            cover_path = '/'.join([self.covers_subpath, '%s.jpg' % book_hash])
+            cover_bytes = None
+            stats = self.ios.exists(cover_path)
+            if stats:
+                cover_bytes = self.ios.read(cover_path, mode='rb')
+            return cover_bytes
+
         def _get_marvin_genres(cur, book_id):
             # Get the genre(s) for this book
             genre_cur = con.cursor()
@@ -250,11 +263,11 @@ if True:
                                     DatePublished,
                                     Description,
                                     FileName,
+                                    Hash,
                                     IsRead,
                                     NewFlag,
                                     Publisher,
                                     ReadingList,
-                                    SmallCoverJpg,
                                     Title,
                                     UUID
                                   FROM Books
@@ -300,7 +313,7 @@ if True:
                         this_book.series_index = None
                     _file_size = self.ios.stat('/'.join(['/Documents', this_book.path]))['st_size']
                     this_book.size = int(_file_size)
-                    this_book.thumbnail = row[b'SmallCoverJpg']
+                    this_book.thumbnail = _get_marvin_cover(row[b'Hash'])
                     this_book.tags = _get_marvin_genres(cur, book_id)
                     this_book.title_sort = row[b'CalibreTitleSort']
                     this_book.uuid = row[b'UUID']
@@ -1310,7 +1323,7 @@ if True:
     # helpers
     def _cover_to_thumb(self, metadata):
         '''
-        Generate a cover thumb matching the size retrieved from Marvin's database
+        Generate a cover thumb matching the size retrieved from Marvin's cover cache
         SmallCoverJpg: 180x270
         LargeCoverJpg: 450x675
         '''
