@@ -556,7 +556,7 @@ if True:
         '''
         Delete books at paths on device.
         '''
-        self._log_location()
+        self._log_location(paths)
 
         command_name = 'delete_books'
         command_element = 'deletebooks'
@@ -1458,7 +1458,7 @@ if True:
         '''
         Copy remote_db_path from iOS to local storage as needed
         '''
-        #self._log_location("remote_db_path: '%s'" % (remote_db_path))
+        self._log_location()
 
         local_db_path = None
         db_stats = {}
@@ -1472,13 +1472,24 @@ if True:
                 path = ''.join(shorten_components_to(245-plen, [path]))
 
             full_path = os.path.join(self.temp_dir, path)
+
+            # Test remote file metadata to confirm we're up to date - size and mtime
             if os.path.exists(full_path):
                 lfs = os.stat(full_path)
-                if (int(db_stats['st_mtime']) == lfs.st_mtime and
-                    int(db_stats['st_size']) == lfs.st_size):
-                    local_db_path = full_path
+                if int(db_stats['st_mtime']) == lfs.st_mtime:
+                    self._log('st_mtime matches: %d' % lfs.st_mtime)
+                    if int(db_stats['st_size']) == lfs.st_size:
+                        self._log('st_size matches: {:,}'.format(lfs.st_size))
+                        local_db_path = full_path
+                        self._log("local_db is current")
 
+#                 if (int(db_stats['st_mtime']) == lfs.st_mtime and
+#                     int(db_stats['st_size']) == lfs.st_size):
+#                     local_db_path = full_path
+
+            # If we don't have a valid local copy, update from iDevice
             if not local_db_path:
+                self._log("updating local_db from %s" % repr(remote_db_path))
                 with open(full_path, 'wb') as out:
                     self.ios.copy_from_idevice(remote_db_path, out)
                 local_db_path = out.name
@@ -1491,19 +1502,40 @@ if True:
     def _remove_existing_copy(self, path, metadata):
         '''
         '''
+        pop_list = []
         for book in self.cached_books:
             matched = False
             if self.cached_books[book]['uuid'] == metadata.uuid:
                 matched = True
                 self._log_location("'%s' matched on uuid '%s'" % (metadata.title, metadata.uuid))
             elif (self.cached_books[book]['title'] == metadata.title and
-                  self.cached_books[book]['author'] == metadata.author):
+                  self.cached_books[book]['authors'] == metadata.authors):
                 matched = True
-                self._log_location("'%s' matched on author '%s'" % (metadata.title, metadata.author))
+                self._log_location("'%s' matched on author '%s'" % (metadata.title, metadata.authors))
             if matched:
-                self.update_list.append(self.cached_books[book])
-                self.delete_books([path])
-                break
+                if path not in self.cached_books:
+                    # If book was originally loaded into Marvin outside of this driver,
+                    # path won't match, so we need to find the original path name
+                    self._log("path not found in self.cached_books: %s" % repr(path))
+                    for path in self.cached_books:
+                        if (self.cached_books[path]['title'] == metadata.title and
+                            self.cached_books[path]['authors'] == metadata.authors):
+                            self._log("actual path: %s" % repr(path))
+                            self.update_list.append(self.cached_books[path])
+                            pop_list.append(book)
+                            self.delete_books([path])
+                            break
+                    else:
+                        self._log("ERROR: Unable to remove %s from self.cached_books" % repr(metadata.title))
+
+                else:
+                    self.update_list.append(self.cached_books[book])
+                    self.delete_books([path])
+                    break
+
+        # Remove any books whose path changed
+        for book in pop_list:
+            self.cached_books.pop(book)
 
     def _report_upload_results(self, total_sent):
         '''
