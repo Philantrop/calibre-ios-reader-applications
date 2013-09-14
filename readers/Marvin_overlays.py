@@ -1402,7 +1402,10 @@ if True:
         this_book.word_count = None
         wc_lookup = self.prefs.get('marvin_word_count_lookup')
         if wc_lookup:
-            this_book.word_count = metadata.metadata_for_field("#%s" % wc_lookup)['#value#']
+            try:
+                this_book.word_count = metadata.metadata_for_field("#%s" % wc_lookup)['#value#']
+            except:
+                pass
         return this_book
 
     def _get_field_items(self, mi):
