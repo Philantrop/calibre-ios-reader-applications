@@ -414,7 +414,7 @@ class iOSReaderApp(DriverBase):
     supported_platforms = ['linux', 'osx', 'windows']
     temp_dir = None
     verbose = None
-    version = (1, 1, 1)
+    version = (1, 1, 2)
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -488,6 +488,9 @@ class iOSReaderApp(DriverBase):
 
         _PRODUCT_ID.add(0x129e)     # iPod Touch 4G
         _BCD.add(0x410)
+
+        _PRODUCT_ID.add(0x12aa)     # iPod Touch 5G
+        _BCD.add(0x510)
 
     # Finalize the supported BCD and USB fingerprints
     VENDOR_ID = [0x05ac]
