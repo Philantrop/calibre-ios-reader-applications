@@ -4,6 +4,9 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
+__license__ = 'GPL v3'
+__copyright__ = '2013, Gregory Riker'
+
 import base64, cStringIO, json, os, sqlite3, subprocess, time
 from datetime import datetime
 
@@ -15,7 +18,8 @@ from calibre_plugins.ios_reader_apps import Book, iOSReaderApp
 
 if True:
     '''
-    Overlay methods for GoodReader driver
+    Overlay methods for Kindle for iOS driver
+    Add silent switch "kindle_caching_disabled": true to .json to disable caching
 
     *** NB: Do not overlay open() ***
     '''
@@ -36,15 +40,15 @@ if True:
 
         # Plugboards
         self.CAN_DO_DEVICE_DB_PLUGBOARD = False
-        self.DEVICE_PLUGBOARD_NAME = 'GOODREADER'
+        self.DEVICE_PLUGBOARD_NAME = 'KINDLE_FOR_IOS'
 
         # Which metadata on books can be set via the GUI.
-        self.CAN_SET_METADATA = ['title', 'authors']
+        self.CAN_SET_METADATA = []
 
         # ~~~~~~~~~ Variables ~~~~~~~~~
         self.busy = False
         self.documents_folder = b'/Documents'
-        self.format_map = ['pdf']
+        self.format_map = ['mobi']
         self.ios_connection = {
             'app_installed': False,
             'connected': False,
@@ -52,7 +56,7 @@ if True:
             'ejected': False,
             'udid': 0
             }
-        self.path_template = '{0}.pdf'
+        self.path_template = '{0}.mobi'
         self.local_metadata = None
         self.remote_metadata = '/Library/calibre_metadata.sqlite'
 
@@ -151,10 +155,10 @@ if True:
                         # Make a local copy of the book, get the stats
                         remote_path = '/'.join([self.documents_folder, book])
                         stats = self.ios.stat(remote_path)
-                        local_path = self._localize_pdf('/'.join([self.documents_folder, book]))
-                        pdf_stats = {'path': local_path, 'stats': stats}
+                        local_path = self._localize_mobi('/'.join([self.documents_folder, book]))
+                        book_stats = {'path': local_path, 'stats': stats}
                         try:
-                            this_book = self._get_metadata(book, pdf_stats)
+                            this_book = self._get_metadata(book, book_stats)
                             os.remove(local_path)
                         except:
                             import traceback
@@ -178,7 +182,7 @@ if True:
                                           title_sort,
                                           uuid)
                                         VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                                        (unicode(' & '.join(this_book.authors)),
+                                        (unicode('; '.join(this_book.authors)),
                                          unicode(this_book.author_sort),
                                          this_book.dateadded,
                                          this_book.path,
@@ -192,7 +196,7 @@ if True:
                         self.report_progress(float((i + 1)*100 / len(installed_books))/100,
                             '%(num)d of %(tot)d' % dict(num=i + 1, tot=len(installed_books)))
 
-                # Remove orphans (books no longer in GoodReader) from db
+                # Remove orphans (books no longer in Kindle) from db
                 ib = set(installed_books)
                 mb = set(moved_books)
                 orphans = [x for x in cached_books if x not in ib and x not in mb]
@@ -259,7 +263,7 @@ if True:
         # Set a flag so eject doesn't interrupt communication with iDevice
         self.busy = True
 
-        # 0: If we've already discovered a connected device without GoodReader, exit
+        # 0: If we've already discovered a connected device without app, exit
         if self.ios_connection['udid'] and self.ios_connection['app_installed'] is False:
             if DEBUG_CAN_HANDLE:
                 self._log("self.ios_connection['udid']: %s" % self.ios_connection['udid'])
@@ -329,19 +333,19 @@ if True:
                 self._reset_ios_connection(udid=connected_ios_devices[0], verbose=DEBUG_CAN_HANDLE)
             """
 
-            # 2. Is GoodReader installed on this iDevice?
+            # 2. Is app installed on this iDevice?
             if not self.ios_connection['app_installed']:
                 if DEBUG_CAN_HANDLE:
-                    self._log("2. GoodReader installed, attempting connection")
+                    self._log("2. App installed, attempting connection")
                 self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_id=self.app_id)
                 self.ios_connection['device_name'] = self.ios.device_name
                 if DEBUG_CAN_HANDLE:
                     self._log("2a. self.ios_connection: %s" % _show_current_connection())
 
-                # If no GoodReader, we can't handle, so exit
+                # If no app, we can't handle, so exit
                 if not self.ios_connection['app_installed']:
                     if DEBUG_CAN_HANDLE:
-                        self._log("2. GoodReader not installed")
+                        self._log("2. App not installed")
                     self.busy = False
                     return self.ios_connection['app_installed']
 
@@ -560,8 +564,8 @@ if True:
                                                 'rev_')[-1].replace(':', 'a'), 16)
                                 except:
                                     bcd = None
-                                goodreader_connected = self.can_handle((vendor_id, product_id, bcd, None, None, None))
-                                if goodreader_connected:
+                                app_connected = self.can_handle((vendor_id, product_id, bcd, None, None, None))
+                                if app_connected:
                                     return True, (vendor_id, product_id, bcd, None, None, None)
         except:
             pass
@@ -639,10 +643,10 @@ if True:
 
     def shutdown(self):
         '''
-        If silent switch goodreader_caching_disabled is true, remove remote cached
+        If silent switch kindle_caching_disabled is true, remove remote cached
         '''
         self._log_location()
-        if self.prefs.get('goodreader_caching_disabled', False):
+        if self.prefs.get('kindle_caching_disabled', False):
             self._log("deleting remote metadata cache")
             self.ios.remove(str(self.remote_metadata))
 
@@ -691,7 +695,7 @@ if True:
                                                title = "{2}",
                                                title_sort = "{3}"
                                            WHERE filename = {4}
-                                        '''.format(self._escape_delimiters(' & '.join(book.authors)),
+                                        '''.format(self._escape_delimiters('; '.join(book.authors)),
                                                    self._escape_delimiters(author_to_author_sort(book.authors[0])),
                                                    self._escape_delimiters(book.title),
                                                    self._escape_delimiters(title_sort(book.title)),
@@ -750,7 +754,7 @@ if True:
                                   title_sort,
                                   uuid)
                                 VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)''',
-                                (unicode(' & '.join(this_book.authors)),
+                                (unicode('; '.join(this_book.authors)),
                                  unicode(this_book.author_sort),
                                  this_book.dateadded,
                                  this_book.path,
@@ -830,7 +834,7 @@ if True:
         from calibre.ebooks.metadata import authors_to_string
 
         self._log_location(metadata.title)
-        this_book = Book(metadata.title, ' & '.join(metadata.authors))
+        this_book = Book(metadata.title, '; '.join(metadata.authors))
         this_book.author_sort = metadata.author_sort
         this_book.dateadded = time.mktime(time.gmtime())
         this_book.datetime = datetime.fromtimestamp(this_book.dateadded).timetuple()
@@ -842,7 +846,7 @@ if True:
         this_book.uuid = metadata.uuid
 
         if False:
-            self._log("%s by %s" % (this_book.title, ' & '.join(this_book.authors)))
+            self._log("%s by %s" % (this_book.title, '; '.join(this_book.authors)))
             self._log("path: %s" % this_book.path)
             self._log("author_sort: %s" % this_book.author_sort)
             self._log("title_sort: %s" % this_book.title_sort)
@@ -900,86 +904,55 @@ if True:
             self._log("***Error: unable to find '%s' in db" % book)
             return None
 
-    def _get_goodreader_thumb(self, remote_path):
+    def _get_kindle_thumb(self, thumb_data):
         '''
-        remote_path is relative to /Documents
-        GoodReader caches small thumbs of book covers. If we didn't send the book, fetch
-        the cached copy from the iDevice. These thumbs will be scaled up to the size we
-        use when sending from calibre for consistency.
         '''
         from PIL import Image as PILImage
         from calibre import fit_image
 
-        def _build_local_path():
-            '''
-            GoodReader stores individual dbs for each book, matching the folder and
-            name structure in the Documents folder. Make a local version, renamed to .db
-            '''
-            path = remote_db_path.split('/')[-1]
-            if iswindows:
-                from calibre.utils.filenames import shorten_components_to
-                plen = len(self.temp_dir)
-                path = ''.join(shorten_components_to(245-plen, [path]))
+        img_data = cStringIO.StringIO(thumb_data)
+        im = PILImage.open(img_data)
+        scaled, width, height = fit_image(im.size[0], im.size[1], self.COVER_WIDTH, self.COVER_HEIGHT)
+        im = im.resize((self.COVER_WIDTH, self.COVER_HEIGHT), PILImage.NEAREST)
+        thumb = cStringIO.StringIO()
+        im.convert('RGB').save(thumb, 'JPEG')
+        thumbnail = thumb.getvalue()
+        img_data.close()
+        thumb.close()
 
-            full_path = os.path.join(self.temp_dir, path)
-            base = os.path.splitext(full_path)[0]
-            full_path = base + ".db"
-            return os.path.normpath(full_path)
+        return thumbnail
 
-        self._log_location(remote_path)
-        remote_db_path = '/'.join(['/Library','Application Support', 'com.goodiware.GoodReader.ASRoot',
-                                   'Previews', '0', remote_path])
-
-        thumb_data = None
-
-        db_stats = self.ios.stat(remote_db_path)
-        if db_stats:
-            full_path = _build_local_path()
-            with open(full_path, 'wb') as out:
-                self.ios.copy_from_idevice(remote_db_path, out)
-            local_db_path = out.name
-            con = sqlite3.connect(local_db_path)
-            with con:
-                con.row_factory = sqlite3.Row
-                cur = con.cursor()
-                cur.execute('''SELECT
-                                thumb
-                               FROM Pages WHERE pageNum = "1"
-                            ''')
-                row = cur.fetchone()
-                if row:
-                    img_data = cStringIO.StringIO(row[b'thumb'])
-                    im = PILImage.open(img_data)
-                    scaled, width, height = fit_image(im.size[0], im.size[1], self.COVER_WIDTH, self.COVER_HEIGHT)
-                    im = im.resize((self.COVER_WIDTH, self.COVER_HEIGHT), PILImage.NEAREST)
-                    thumb = cStringIO.StringIO()
-                    im.convert('RGB').save(thumb, 'JPEG')
-                    thumb_data = thumb.getvalue()
-                    img_data.close()
-                    thumb.close()
-
-        return thumb_data
-
-    def _get_metadata(self, book, pdf_stats):
+    def _get_metadata(self, book, book_stats):
         '''
         Return a populated Book object with available metadata
         '''
         from calibre.ebooks.metadata import author_to_author_sort, authors_to_string, title_sort
-        from calibre.ebooks.metadata.pdf import get_metadata
+        from calibre.ebooks.metadata.mobi import get_metadata
         self._log_location(repr(book))
 
-        pdf_path = os.path.join(self.temp_dir, pdf_stats['path'])
-        with open(pdf_path, 'rb') as f:
+        mobi_path = os.path.join(self.temp_dir, book_stats['path'])
+        with open(mobi_path, 'rb') as f:
             stream = cStringIO.StringIO(f.read())
 
-        mi = get_metadata(stream, cover=False)
-        this_book = Book(mi.title, ' & '.join(mi.authors))
-        this_book.author_sort = author_to_author_sort(mi.authors[0])
-        this_book.datetime = datetime.fromtimestamp(int(pdf_stats['stats']['st_birthtime'])).timetuple()
-        this_book.dateadded = int(pdf_stats['stats']['st_birthtime'])
+        mi = get_metadata(stream)
+
+        if False:
+            ''' Perform a bit of voodoo to match Kindle multiple author style '''
+            ks_authors = []
+            for a in mi.authors:
+                if "," in a:
+                    # Already ln, fn
+                    ks_authors.append(a)
+                else:
+                    ks_authors.append(author_to_author_sort(a))
+
+        this_book = Book(mi.title, '; '.join(mi.authors))
+        this_book.author_sort = '; '.join(mi.authors)
+        this_book.datetime = datetime.fromtimestamp(int(book_stats['stats']['st_birthtime'])).timetuple()
+        this_book.dateadded = int(book_stats['stats']['st_birthtime'])
         this_book.path = book
-        this_book.size = int(pdf_stats['stats']['st_size'])
-        this_book.thumbnail = self._get_goodreader_thumb(book)
+        this_book.size = int(book_stats['stats']['st_size'])
+        this_book.thumbnail = self._get_kindle_thumb(mi.cover_data[1])
         if this_book.thumbnail:
             this_book.thumb_data = base64.b64encode(this_book.thumbnail)
         else:
@@ -1071,7 +1044,7 @@ if True:
 
         return {'path': local_db_path, 'stats': db_stats}
 
-    def _localize_pdf(self, remote_path):
+    def _localize_mobi(self, remote_path):
         '''
         Copy remote_path from iOS to local storage as needed
         '''
