@@ -55,9 +55,12 @@ plugin_prefs = JSONConfig('plugins/iOS reader applications')
 # 'iBooks' is removed under linux
 # If an app is available in separate versions for iPad/iPhone, list iPad version first
 READER_APP_ALIASES = {
-                      'iBooks':     [b'com.apple.iBooks'],
                       'GoodReader': [b'com.goodiware.GoodReaderIPad', b'com.goodiware.GoodReader'],
-                      'Marvin':     [b'com.appstafarian.Marvin', b'com.appstafarian.MarvinIP']
+                      'iBooks':     [b'com.apple.iBooks'],
+                      'Kindle':     [b'com.amazon.Lassen'],
+                      'Marvin':     [b'com.appstafarian.Marvin',
+                                     b'com.appstafarian.MarvinIP',
+                                     b'com.appstafarian.MarvinIP-free']
                      }
 
 class Book(Metadata):

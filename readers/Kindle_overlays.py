@@ -18,8 +18,7 @@ from calibre_plugins.ios_reader_apps import Book, iOSReaderApp
 
 if True:
     '''
-    Overlay methods for Kindle for iOS driver
-    Add silent switch "kindle_caching_disabled": true to .json to disable caching
+    Kindle for iOS overlays
 
     *** NB: Do not overlay open() ***
     '''
