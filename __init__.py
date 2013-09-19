@@ -1039,7 +1039,9 @@ class iOSReaderApp(DriverBase):
 
         # Store the raw source to a temp file, import it
         if cls_name == "development_mode":
-            overlay = imp.load_source("temporary_overlay_methods", self.prefs.get('development_overlay', None))
+            do = self.prefs.get('development_overlay', None)
+            self._log("loading development_overlay %s" % repr(do))
+            overlay = imp.load_source("temporary_overlay_methods", do)
         else:
             overlay_source = 'readers/%s_overlays.py' % cls_name
             basename = re.sub('readers/', '', overlay_source)
