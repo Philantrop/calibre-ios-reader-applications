@@ -1682,8 +1682,11 @@ if True:
         book_tag['uuid'] = book.uuid
         wc_lookup = self.prefs.get('marvin_word_count_lookup')
         if wc_lookup:
-            book_tag['wordcount'] = book.metadata_for_field("#%s" % wc_lookup)['#value#']
-
+            try:
+                book_tag['wordcount'] = book.metadata_for_field("#%s" % wc_lookup)['#value#']
+            except:
+                pass
+                
         # Cover
         cover = book.get('thumbnail')
         if cover:
