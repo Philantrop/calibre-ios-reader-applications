@@ -15,6 +15,7 @@ from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
 from calibre.gui2 import Application
 from calibre.utils.config import prefs
 from calibre.utils.icu import sort_key
+from calibre.utils.magick.draw import thumbnail
 from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.ios_reader_apps import (Book, BookList,
@@ -352,9 +353,8 @@ if True:
             if self.prefs.get('development_mode', False):
                 self._log("cached %d books from Marvin:" % len(cached_books))
                 for book in self.cached_books:
-                    self._log("{0:30} {1:42} {2} {3} {4}".format(
+                    self._log("{0:30} {1} {2} {3}".format(
                         repr(self.cached_books[book]['title'][0:26]),
-                        repr(self.cached_books[book]['pubdate']),
                         repr(self.cached_books[book]['authors']),
                         repr(self.cached_books[book]['device_collections']),
                         repr(book)))
@@ -1295,7 +1295,8 @@ if True:
         manifest_count = len(upload_soup.manifest.findAll(True))
         if manifest_count:
             # Copy the command file to the staging folder
-            self._stage_command_file("upload_books", upload_soup, show_command=self.prefs.get('development_mode', False))
+            self._stage_command_file("upload_books", upload_soup, 
+                show_command=self.prefs.get('development_mode', False))
 
             # Wait for completion
             self._wait_for_command_completion("upload_books")
@@ -1358,6 +1359,7 @@ if True:
         '''
         Need original metadata for id, uuid
         Need metadata_x for transformed title, author
+        metadata.cover: (tmp) path to cover (jpg)
         '''
         from calibre import strftime
         from calibre.ebooks.metadata import authors_to_string
@@ -1370,10 +1372,21 @@ if True:
 
         cover_hash = 0
 
-        # 'thumbnail': (width, height, data)
-        cover = metadata.get('thumbnail')
-        if cover:
-            cover_hash = hashlib.md5(cover[2]).hexdigest()
+        if metadata.has_cover:
+            # Generate cover_hash from cover.jpg
+            with open(metadata.cover, 'rb') as f:
+                cover_bytes = f.read()
+            try:
+                sized_thumb = thumbnail(cover_bytes,
+                                        self.THUMBNAIL_HEIGHT,
+                                        self.THUMBNAIL_HEIGHT)
+                cover_hash = hashlib.md5(sized_thumb[2]).hexdigest()
+            except:
+                if cover_bytes:
+                    self._log("error calculating cover_hash")
+                else:
+                    self._log("no cover available for %s" % this_book.title)
+            
         this_book.cover_hash = cover_hash
 
         this_book.datetime = time.gmtime()
