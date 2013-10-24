@@ -350,14 +350,12 @@ if True:
                 self.report_progress(1.0, 'finished')
 
             self.cached_books = cached_books
+
             if self.prefs.get('development_mode', False):
                 self._log("cached %d books from Marvin:" % len(cached_books))
-                for book in self.cached_books:
-                    self._log("{0:30} {1} {2} {3}".format(
-                        repr(self.cached_books[book]['title'][0:26]),
-                        repr(self.cached_books[book]['authors']),
-                        repr(self.cached_books[book]['device_collections']),
-                        repr(book)))
+                for p, v in self.cached_books.iteritems():
+                    self._log(" {0} {1:30} {2} {3}".format(
+                        p, repr(v['title'][0:26]), v['authors'], v['device_collections']))
 
         return booklist
 
@@ -1286,6 +1284,11 @@ if True:
                     'title_sort': this_book.title_sort,
                     'uuid': this_book.uuid,
                     }
+
+            if self.prefs.get('development_mode', False):
+                self._log("self.cached_books:")
+                for p,v in self.cached_books.iteritems():
+                    self._log(" {0} {1}".format(p, repr(v['title'])))
 
             # Report progress
             if self.report_progress is not None:

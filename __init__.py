@@ -13,7 +13,7 @@ Source for this plugin is available as a Github repository at
 https://github.com/GRiker/calibre-apple-reader-applications,
 which also includes an overview of the communication protocol in README.md
 """
-import cStringIO, imp, os, re, sqlite3, sys, tempfile, time
+import cStringIO, imp, os, platform, re, sqlite3, sys, tempfile, time
 
 from inspect import getmembers, isfunction
 from PIL import Image as PILImage
@@ -340,6 +340,9 @@ class DriverBase(DeviceConfig, DevicePlugin):
         from calibre_plugins.ios_reader_apps.config import ConfigWidget
         applist = READER_APP_ALIASES.keys()
         if islinux and 'iBooks' in applist:
+            applist.remove('iBooks')
+        if isosx and platform.mac_ver()[0] >= "10.9":
+            self._log("*** iBooks is not supported > OS X 10.8 ***")
             applist.remove('iBooks')
         self.cw = ConfigWidget(self, applist)
         return self.cw
