@@ -1437,40 +1437,44 @@ if True:
         if verbose:
             self._log_location(mi.title)
 
-        collection_field = self.prefs.get('marvin_collection_field', '')
-        self._log("collection_field: %s" % collection_field)
-
-        # Build a map of name:field for eligible custom fields
-        eligible_custom_fields = {}
-        for cf in mi.get_all_user_metadata(False):
-            if mi.metadata_for_field(cf)['datatype'] in ['enumeration', 'text']:
-                eligible_custom_fields[mi.metadata_for_field(cf)['name'].lower()] = cf
-
-        # Collect the field items for the specified collection field
         field_items = []
-        if collection_field.lower() in eligible_custom_fields:
-            value = mi.get(eligible_custom_fields[collection_field.lower()])
-            if value:
-                if type(value) is list:
-                    field_items += value
-                elif type(value) in [str, unicode]:
-                    field_items.append(value)
-                else:
-                    self._log("Unexpected type: '%s'" % type(value))
-        else:
-            self._log_location("'%s': Invalid metadata field specified as collection source: '%s'" %
-                               (mi.title, collection_field))
 
-        # Strip flag value, managed only in Marvin
-        flags_to_strip = []
-        for item in field_items:
-            if item.upper() in self.flags.values():
-                flags_to_strip.append(item)
-        for flag in flags_to_strip:
-            field_items.remove(flag)
+        collection_field = self.prefs.get('marvin_collection_field', None)
+		if collection_field:
+			if verbose:
+				self._log("collection_field: %s" % collection_field)
 
-        if True or verbose:
-            self._log("collections: %s" % field_items)
+			# Build a map of name:field for eligible custom fields
+			eligible_custom_fields = {}
+			for cf in mi.get_all_user_metadata(False):
+				if mi.metadata_for_field(cf)['datatype'] in ['enumeration', 'text']:
+					eligible_custom_fields[mi.metadata_for_field(cf)['name'].lower()] = cf
+
+			# Collect the field items for the specified collection field
+			if collection_field.lower() in eligible_custom_fields:
+				value = mi.get(eligible_custom_fields[collection_field.lower()])
+				if value:
+					if type(value) is list:
+						field_items += value
+					elif type(value) in [str, unicode]:
+						field_items.append(value)
+					else:
+						self._log_location("Unexpected type: '%s'" % type(value))
+			else:
+				self._log_location("'%s': Invalid metadata field specified as collection source: '%s'" %
+								   (mi.title, collection_field))
+
+			# Strip flag value, managed only in Marvin
+			flags_to_strip = []
+			for item in field_items:
+				if item.upper() in self.flags.values():
+					flags_to_strip.append(item)
+			for flag in flags_to_strip:
+				field_items.remove(flag)
+
+			if verbose:
+				self._log("collections: %s" % field_items)
+
         return field_items
 
     def _localize_database_path(self, remote_db_path):
@@ -1682,8 +1686,9 @@ if True:
         book_tag['authorsort'] = escape(book.author_sort)
         book_tag['filename'] = escape(target_epub)
 
-        naive = book.pubdate.replace(hour=0, minute=0, second=0, tzinfo=None)
-        book_tag['pubdate'] = strftime('%Y-%m-%d', t=naive)
+        if book.pubdate is not None:
+            naive = book.pubdate.replace(hour=0, minute=0, second=0, tzinfo=None)
+            book_tag['pubdate'] = strftime('%Y-%m-%d', t=naive)
         book_tag['publisher'] = ''
         if book.publisher is not None:
             book_tag['publisher'] = escape(book.publisher)

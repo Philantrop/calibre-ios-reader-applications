@@ -70,7 +70,6 @@ class ConfigWidget(QWidget, Ui_Dialog):
                     traceback.print_exc()
                 finally:
                     sys.path.remove(widget_path)
-
             else:
                 self._log("no dynamic tab resources found for %s" % name)
 
