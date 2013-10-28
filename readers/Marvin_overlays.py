@@ -1298,7 +1298,7 @@ if True:
         manifest_count = len(upload_soup.manifest.findAll(True))
         if manifest_count:
             # Copy the command file to the staging folder
-            self._stage_command_file("upload_books", upload_soup, 
+            self._stage_command_file("upload_books", upload_soup,
                 show_command=self.prefs.get('development_mode', False))
 
             # Wait for completion
@@ -1389,7 +1389,7 @@ if True:
                     self._log("error calculating cover_hash")
                 else:
                     self._log("no cover available for %s" % this_book.title)
-            
+
         this_book.cover_hash = cover_hash
 
         this_book.datetime = time.gmtime()
@@ -1440,40 +1440,40 @@ if True:
         field_items = []
 
         collection_field = self.prefs.get('marvin_collection_field', None)
-		if collection_field:
-			if verbose:
-				self._log("collection_field: %s" % collection_field)
+        if collection_field:
+            if verbose:
+                self._log("collection_field: %s" % collection_field)
 
-			# Build a map of name:field for eligible custom fields
-			eligible_custom_fields = {}
-			for cf in mi.get_all_user_metadata(False):
-				if mi.metadata_for_field(cf)['datatype'] in ['enumeration', 'text']:
-					eligible_custom_fields[mi.metadata_for_field(cf)['name'].lower()] = cf
+            # Build a map of name:field for eligible custom fields
+            eligible_custom_fields = {}
+            for cf in mi.get_all_user_metadata(False):
+                if mi.metadata_for_field(cf)['datatype'] in ['enumeration', 'text']:
+                    eligible_custom_fields[mi.metadata_for_field(cf)['name'].lower()] = cf
 
-			# Collect the field items for the specified collection field
-			if collection_field.lower() in eligible_custom_fields:
-				value = mi.get(eligible_custom_fields[collection_field.lower()])
-				if value:
-					if type(value) is list:
-						field_items += value
-					elif type(value) in [str, unicode]:
-						field_items.append(value)
-					else:
-						self._log_location("Unexpected type: '%s'" % type(value))
-			else:
-				self._log_location("'%s': Invalid metadata field specified as collection source: '%s'" %
-								   (mi.title, collection_field))
+            # Collect the field items for the specified collection field
+            if collection_field.lower() in eligible_custom_fields:
+                value = mi.get(eligible_custom_fields[collection_field.lower()])
+                if value:
+                    if type(value) is list:
+                        field_items += value
+                    elif type(value) in [str, unicode]:
+                        field_items.append(value)
+                    else:
+                        self._log_location("Unexpected type: '%s'" % type(value))
+            else:
+                self._log_location("'%s': Invalid metadata field specified as collection source: '%s'" %
+                                   (mi.title, collection_field))
 
-			# Strip flag value, managed only in Marvin
-			flags_to_strip = []
-			for item in field_items:
-				if item.upper() in self.flags.values():
-					flags_to_strip.append(item)
-			for flag in flags_to_strip:
-				field_items.remove(flag)
+            # Strip flag value, managed only in Marvin
+            flags_to_strip = []
+            for item in field_items:
+                if item.upper() in self.flags.values():
+                    flags_to_strip.append(item)
+            for flag in flags_to_strip:
+                field_items.remove(flag)
 
-			if verbose:
-				self._log("collections: %s" % field_items)
+            if verbose:
+                self._log("collections: %s" % field_items)
 
         return field_items
 
@@ -1707,7 +1707,7 @@ if True:
                 book_tag['wordcount'] = book.metadata_for_field("#%s" % wc_lookup)['#value#']
             except:
                 pass
-                
+
         # Cover
         cover = book.get('thumbnail')
         if cover:
