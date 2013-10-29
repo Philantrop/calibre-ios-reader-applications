@@ -352,6 +352,10 @@ class DriverBase(DeviceConfig, DevicePlugin):
         config_widget.save_settings()
 
 
+class InvalidEpub(ValueError):
+    pass
+
+
 class iOSReaderApp(DriverBase):
     '''
 

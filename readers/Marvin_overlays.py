@@ -4,14 +4,16 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
-import base64, copy, cStringIO, hashlib, os, re, sqlite3, time
+import base64, copy, cStringIO, hashlib, os, posixpath, re, sqlite3, time
 from datetime import datetime
 from lxml import etree, html
 
-
+from calibre import guess_type
 from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.errors import UserFeedback
 from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
+from calibre.ebooks.chardet import xml_to_unicode
+from calibre.ebooks.oeb.parse_utils import RECOVER_PARSER
 from calibre.gui2 import Application
 from calibre.utils.config import prefs
 from calibre.utils.icu import sort_key
@@ -19,7 +21,11 @@ from calibre.utils.magick.draw import thumbnail
 from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.ios_reader_apps import (Book, BookList,
-    DatabaseMalformedException, DatabaseNotFoundException, iOSReaderApp, ReaderAppSignals)
+    DatabaseMalformedException, DatabaseNotFoundException, InvalidEpub,
+    iOSReaderApp, ReaderAppSignals)
+
+OCF_NS = 'urn:oasis:names:tc:opendocument:xmlns:container'
+OPF_NS = 'http://www.idpf.org/2007/opf'
 
 if True:
     '''
@@ -27,6 +33,7 @@ if True:
 
     *** NB: Do not overlay open() ***
     '''
+
     def _initialize_overlay(self):
         '''
         General initialization that would have occurred in __init__()
@@ -1254,6 +1261,13 @@ if True:
                         collections_tag.insert(0, c_tag)
                     book_tag.insert(0, collections_tag)
 
+                # Detect problematic covers, send <cover> if necessary
+                valid_cover = self._evaluate_replaceable_cover(fpath)
+                if not valid_cover:
+                    cover_tag = self._create_cover_element(metadata[i], upload_soup)
+                    if cover_tag:
+                        book_tag.insert(0, cover_tag)
+
                 upload_soup.manifest.insert(i, book_tag)
 
             new_booklist.append(this_book)
@@ -1358,6 +1372,26 @@ if True:
             self._log("ERROR: no cover available for '%s'" % metadata.title)
         return thumb
 
+    def _create_cover_element(self, mi, soup):
+        '''
+        Return a <cover> element from mi
+        '''
+        self._log_location()
+        cover_tag = None
+        if mi.has_cover:
+            with open(mi.cover, 'rb') as f:
+                cover_bytes = f.read()
+            sized_thumb = thumbnail(cover_bytes,
+                                    self.THUMBNAIL_HEIGHT,
+                                    self.THUMBNAIL_HEIGHT)
+            cover_hash = hashlib.md5(sized_thumb[2]).hexdigest()
+
+            cover_tag = Tag(soup, 'cover')
+            cover_tag['hash'] = cover_hash
+            cover_tag['encoding'] = 'base64'
+            cover_tag.insert(0, base64.b64encode(cover_bytes))
+        return cover_tag
+
     def _create_new_book(self, fpath, metadata, metadata_x, thumb, metadata_only):
         '''
         Need original metadata for id, uuid
@@ -1424,6 +1458,56 @@ if True:
                 pass
         return this_book
 
+    def _evaluate_replaceable_cover(self, path_to_book):
+        '''
+        Return True if cover is replaceable
+        '''
+        def _raster_cover(opf_xml):
+            covers = opf_xml.xpath(r'child::opf:metadata/opf:meta[@name="cover" and @content]',
+                                   namespaces={'opf':OPF_NS})
+            if covers:
+                cover_id = covers[0].get('content')
+                items = opf_xml.xpath(r'child::opf:manifest/opf:item',
+                                      namespaces={'opf':OPF_NS})
+                for item in items:
+                    if item.get('id', None) == cover_id:
+                        mt = item.get('media-type', '')
+                        if 'xml' not in mt:
+                            return item.get('href', None)
+                for item in items:
+                    if item.get('href', None) == cover_id:
+                        mt = item.get('media-type', '')
+                        if mt.startswith('image/'):
+                            return item.get('href', None)
+
+        self._log_location()
+        try:
+            with ZipFile(path_to_book, 'r') as zf:
+                opf_name = self._get_opf_xml(path_to_book, zf)
+                if not opf_name:
+                    self._log('No OPF file')
+                    return False
+                opf_xml = self._get_opf_tree(zf, opf_name)
+                rcover = _raster_cover(opf_xml)
+                if not rcover:
+                    self._log('No supported meta tag or non-xml cover')
+                    return False
+                cpath = posixpath.join(posixpath.dirname(opf_name), rcover)
+                image_extension = os.path.splitext(cpath)[1].lower()
+                if image_extension not in ('.png', '.jpg', '.jpeg'):
+                    self._log('Invalid cover image extension (%s)' % image_extension)
+                    return False
+            return True
+
+        except InvalidEpub as e:
+            self._log('Invalid epub')
+            return False
+        except:
+            self._log('ERROR parsing book')
+            import traceback
+            self._log(traceback.format_exc())
+            return False
+
     def _get_field_items(self, mi):
         '''
         Return the metadata from collection_fields for mi
@@ -1434,11 +1518,9 @@ if True:
             'Text, but with a fixed set of permitted values'
         '''
         verbose = self.prefs.get('development_mode', False)
-        if verbose:
-            self._log_location(mi.title)
+        self._log_location(mi.title)
 
         field_items = []
-
         collection_field = self.prefs.get('marvin_collection_field', None)
         if collection_field:
             if verbose:
@@ -1476,6 +1558,27 @@ if True:
                 self._log("collections: %s" % field_items)
 
         return field_items
+
+    def _get_opf_tree(self, zf, opf_name):
+        data = zf.read(opf_name)
+        data = re.sub(r'http://openebook.org/namespaces/oeb-package/1.0/',
+                OPF_NS, data)
+        return self._parse_xml(data)
+
+    def _get_opf_xml(self, path_to_book, zf):
+        contents = zf.namelist()
+        if 'META-INF/container.xml' not in contents:
+            raise InvalidEpub('Missing container.xml from %s' % path_to_book)
+        container = self._parse_xml(zf.read('META-INF/container.xml'))
+        opf_files = container.xpath((r'child::ocf:rootfiles/ocf:rootfile'
+                                      '[@media-type="%s" and @full-path]'%guess_type('a.opf')[0]
+                                     ), namespaces={'ocf':OCF_NS})
+        if not opf_files:
+            raise InvalidEpub('Could not find OPF in %s' % path_to_book)
+        opf_name = opf_files[0].attrib['full-path']
+        if opf_name not in contents:
+            raise InvalidEpub('OPF file in container.xml not found in:%s'%path_to_book)
+        return opf_name
 
     def _localize_database_path(self, remote_db_path):
         '''
@@ -1521,6 +1624,11 @@ if True:
 
         self.local_db_path = local_db_path
         return local_db_path
+
+    def _parse_xml(self, data):
+        data = xml_to_unicode(data, strip_encoding_pats=True, assume_utf8=True,
+                             resolve_entities=True)[0].strip()
+        return etree.fromstring(data, parser=RECOVER_PARSER)
 
     def _remove_existing_copy(self, path, metadata):
         '''
@@ -1709,20 +1817,15 @@ if True:
                 pass
 
         # Cover
-        cover = book.get('thumbnail')
-        if cover:
-            #self._log("thumb_width: %s" % cover[0])
-            #self._log("thumb_height: %s" % cover[1])
-            cover_hash = hashlib.md5(cover[2]).hexdigest()
+        if book.has_cover:
+            cover_tag = self._create_cover_element(book, update_soup)
+            cover_hash = cover_tag['hash']
+
             if self.cached_books[target_epub]['cover_hash'] != cover_hash:
                 self._log("%s" % (target_epub))
                 self._log(" cover: (device) %s != (library) %s" %
                                      (self.cached_books[target_epub]['cover_hash'], cover_hash))
                 self.cached_books[target_epub]['cover_hash'] = cover_hash
-                cover_tag = Tag(update_soup, 'cover')
-                cover_tag['hash'] = cover_hash
-                cover_tag['encoding'] = 'base64'
-                cover_tag.insert(0, base64.b64encode(cover[2]))
                 book_tag.insert(0, cover_tag)
             else:
                 self._log(" '%s': cover is up to date" % book.title)
@@ -1787,7 +1890,7 @@ if True:
         self._log_location(command_name)
 
         if show_command:
-            if command_name == 'update_metadata':
+            if command_name in ['update_metadata', 'upload_books']:
                 soup = BeautifulStoneSoup(command_soup.renderContents())
                 # <descriptions>
                 descriptions = soup.findAll('description')
@@ -1799,7 +1902,9 @@ if True:
                 covers = soup.findAll('cover')
                 for cover in covers:
                     cover_tag = Tag(soup, 'cover')
-                    cover_tag.insert(0, "(cover removed for debug stream)")
+                    cover_tag['encoding'] = cover['encoding']
+                    cover_tag['hash'] = cover['hash']
+                    cover_tag.insert(0, "(cover data removed for debug stream)")
                     cover.replaceWith(cover_tag)
                 self._log(soup.prettify())
             else:
