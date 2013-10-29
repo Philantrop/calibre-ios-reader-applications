@@ -4,7 +4,7 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
-import base64, copy, cStringIO, hashlib, os, posixpath, re, sqlite3, time
+import base64, copy, cStringIO, hashlib, locale, os, posixpath, re, sqlite3, time
 from datetime import datetime
 from lxml import etree, html
 
@@ -1248,7 +1248,6 @@ if True:
                 # Create <book> for manifest with filename=, coverhash=
                 book_tag = Tag(upload_soup, 'book')
                 book_tag['filename'] = this_book.path
-                book_tag['coverhash'] = this_book.cover_hash
                 if this_book.word_count:
                     book_tag['wordcount'] = this_book.word_count
 
@@ -1267,6 +1266,8 @@ if True:
                     cover_tag = self._create_cover_element(metadata[i], upload_soup)
                     if cover_tag:
                         book_tag.insert(0, cover_tag)
+                else:
+                    book_tag['coverhash'] = this_book.cover_hash
 
                 upload_soup.manifest.insert(i, book_tag)
 
@@ -1890,6 +1891,9 @@ if True:
         self._log_location(command_name)
 
         if show_command:
+            fl = locale.format("%d", len(command_soup.renderContents()), grouping=True)
+            self._log("command_name: %s (%s bytes)" % (command_name, fl))
+
             if command_name in ['update_metadata', 'upload_books']:
                 soup = BeautifulStoneSoup(command_soup.renderContents())
                 # <descriptions>
@@ -1908,7 +1912,6 @@ if True:
                     cover.replaceWith(cover_tag)
                 self._log(soup.prettify())
             else:
-                self._log("command_name: %s" % command_name)
                 self._log(command_soup.prettify())
 
         self.ios.write(command_soup.renderContents(),
