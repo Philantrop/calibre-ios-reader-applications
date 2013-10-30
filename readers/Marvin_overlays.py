@@ -1920,12 +1920,10 @@ if True:
         update_soup.manifest.insert(0, book_tag)
 
     def _stage_command_file(self, command_name, command_soup, show_command=False):
-        self._log_location(command_name)
+        fl = locale.format("%d", len(command_soup.renderContents()), grouping=True)
+        self._log_location("%s: %s bytes" % (command_name, fl))
 
         if show_command:
-            fl = locale.format("%d", len(command_soup.renderContents()), grouping=True)
-            self._log("command_name: %s (%s bytes)" % (command_name, fl))
-
             if command_name in ['update_metadata', 'upload_books']:
                 soup = BeautifulStoneSoup(command_soup.renderContents())
                 # <descriptions>
