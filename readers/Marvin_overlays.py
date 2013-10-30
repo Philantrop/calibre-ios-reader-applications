@@ -1260,11 +1260,13 @@ if True:
                         collections_tag.insert(0, c_tag)
                     book_tag.insert(0, collections_tag)
 
-                # Detect problematic covers, send <cover> if necessary
-                valid_cover = self._evaluate_replaceable_cover(fpath)
-                if not valid_cover:
+                # Detect unreplaceable covers, send <cover> if necessary
+                replaceable_cover = self._evaluate_replaceable_cover(fpath)
+                original_cover = self._evaluate_original_cover(metadata[i])
+                if not replaceable_cover and not original_cover:
                     cover_tag = self._create_cover_element(metadata[i], upload_soup)
                     if cover_tag:
+                        self._log("sending replacement cover for %s" % metadata[i].title)
                         book_tag.insert(0, cover_tag)
                 else:
                     book_tag['coverhash'] = this_book.cover_hash
@@ -1458,6 +1460,36 @@ if True:
             except:
                 pass
         return this_book
+
+    def _evaluate_original_cover(self, mi):
+        '''
+        Guess whether available cover is original or user-replaced based on timestamps
+        '''
+        self._log_location()
+
+        epub_path = mi.format_metadata['EPUB']['path']
+        cover_path = os.path.join(os.path.dirname(epub_path), "cover.jpg")
+        if not os.path.exists(cover_path):
+            self._log("no cover found")
+            return None
+
+        cover_mtime = datetime.utcfromtimestamp(os.stat(cover_path).st_mtime)
+        epub_mtime = mi.format_metadata['EPUB']['mtime'].replace(tzinfo=None)
+
+        diff = cover_mtime - epub_mtime
+        cover_is_original = (diff.seconds == 0)
+        if False:
+            self._log(" epub mtime: %s" % repr(epub_mtime))
+            self._log("cover mtime: %s" % repr(cover_mtime))
+            self._log("seconds: %s" % repr(diff.seconds))
+            self._log("returning: %s" % (diff.seconds == 0))
+
+        if cover_is_original:
+            self._log("cover is original")
+        else:
+            self._log("cover is replacement")
+
+        return cover_is_original
 
     def _evaluate_replaceable_cover(self, path_to_book):
         '''
