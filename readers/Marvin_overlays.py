@@ -1166,6 +1166,7 @@ if True:
         self.update_list = []
         self.user_feedback_after_callback = None
 
+        replaced_covers = 0
         for (i, fpath) in enumerate(files):
 
             # Selective processing flag
@@ -1248,6 +1249,7 @@ if True:
                 # Create <book> for manifest with filename=, coverhash=
                 book_tag = Tag(upload_soup, 'book')
                 book_tag['filename'] = this_book.path
+                book_tag['coverhash'] = this_book.cover_hash
                 if this_book.word_count:
                     book_tag['wordcount'] = this_book.word_count
 
@@ -1262,14 +1264,19 @@ if True:
 
                 # Detect unreplaceable covers, send <cover> if necessary
                 replaceable_cover = self._evaluate_replaceable_cover(fpath)
-                original_cover = self._evaluate_original_cover(metadata[i])
-                if not replaceable_cover and not original_cover:
-                    cover_tag = self._create_cover_element(metadata[i], upload_soup)
-                    if cover_tag:
-                        self._log("sending replacement cover for %s" % metadata[i].title)
-                        book_tag.insert(0, cover_tag)
+                if not replaceable_cover:
+                    original_cover = self._evaluate_original_cover(metadata[i])
+                    if not original_cover:
+                        cover_tag = self._create_cover_element(metadata[i], upload_soup)
+                        if cover_tag:
+                            self._log("sending replacement cover for %s" % metadata[i].title)
+                            replaced_covers += 1
+                            book_tag.insert(0, cover_tag)
+                            del book_tag['coverhash']
                 else:
-                    book_tag['coverhash'] = this_book.cover_hash
+                    # Make sure we have a cover.jpg
+                    if not metadata[i].has_cover:
+                        del book_tag['coverhash']
 
                 upload_soup.manifest.insert(i, book_tag)
 
@@ -1314,12 +1321,18 @@ if True:
 
         manifest_count = len(upload_soup.manifest.findAll(True))
         if manifest_count:
+            # Report replaced_covers
+            if replaced_covers:
+                self._log("Sending {0} replacement {1}".format(replaced_covers,
+                    'cover' if replaced_covers == 1 else 'covers'))
+
             # Copy the command file to the staging folder
             self._stage_command_file("upload_books", upload_soup,
                 show_command=self.prefs.get('development_mode', False))
 
             # Wait for completion
             self._wait_for_command_completion("upload_books")
+
 
         # Perform metadata updates
         if self.metadata_updates:
@@ -1485,9 +1498,9 @@ if True:
             self._log("returning: %s" % (diff.seconds == 0))
 
         if cover_is_original:
-            self._log("cover is original")
+            self._log("original cover in calibre db")
         else:
-            self._log("cover is replacement")
+            self._log("cover has been replaced in calibre db")
 
         return cover_is_original
 
@@ -1530,6 +1543,7 @@ if True:
                 if image_extension not in ('.png', '.jpg', '.jpeg'):
                     self._log('Invalid cover image extension (%s)' % image_extension)
                     return False
+            self._log('cover is replaceable')
             return True
 
         except InvalidEpub as e:
