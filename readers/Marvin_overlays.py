@@ -1182,8 +1182,10 @@ if True:
             else:
                 # Test for author/title match
                 for book in self.cached_books:
-                    if (self.cached_books[book]['title'] == metadata[i].title and
-                        self.cached_books[book]['authors'] == metadata[i].authors):
+                    if 'download_pending' in self.cached_books[book]:
+                        continue
+                    if (self.cached_books[book]['title'] == metadata[i].title
+                        and self.cached_books[book]['authors'] == metadata[i].authors):
                         self._log("'%s' already exists in Marvin (author match)" % metadata[i].title)
                         target_epub = book
                         target_epub_exists = True
@@ -1309,6 +1311,9 @@ if True:
                     'uuid': this_book.uuid,
                     }
 
+            if not target_epub_exists:
+                self.cached_books[this_book.path]['download_pending'] = True
+
             if self.prefs.get('development_mode', False):
                 self._log("self.cached_books:")
                 for p,v in self.cached_books.iteritems():
@@ -1333,7 +1338,6 @@ if True:
             # Wait for completion
             self._wait_for_command_completion("upload_books")
 
-
         # Perform metadata updates
         if self.metadata_updates:
             self._log("Sending metadata updates")
@@ -1344,6 +1348,11 @@ if True:
 
             # Wait for completion
             self._wait_for_command_completion("update_metadata")
+
+        # Remove download_pending flags
+        for v in self.cached_books.itervalues():
+            if 'download_pending' in v:
+                del v['download_pending']
 
         # Update local copy of mainDb
         self._localize_database_path(self.books_subpath)
@@ -1394,7 +1403,7 @@ if True:
         '''
         self._log_location()
         cover_tag = None
-        if mi.has_cover:
+        if mi.has_cover and mi.cover:
             with open(mi.cover, 'rb') as f:
                 cover_bytes = f.read()
             sized_thumb = thumbnail(cover_bytes,
@@ -1425,7 +1434,7 @@ if True:
 
         cover_hash = 0
 
-        if metadata.has_cover:
+        if metadata.has_cover and metadata.cover:
             # Generate cover_hash from cover.jpg
             with open(metadata.cover, 'rb') as f:
                 cover_bytes = f.read()
@@ -1682,6 +1691,11 @@ if True:
         '''
         pop_list = []
         for book in self.cached_books:
+
+            # Ignore books currently being downloaded
+            if 'download_pending' in self.cached_books[book]:
+                continue
+
             matched = False
             if self.cached_books[book]['uuid'] == metadata.uuid:
                 matched = True
