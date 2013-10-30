@@ -2129,6 +2129,7 @@ if True:
                 watchdog.cancel()
 
                 final_code = status.get('code')
+                final_status = None
                 if final_code != '0':
                     if final_code == '-1':
                         final_status= "in progress"
@@ -2142,9 +2143,12 @@ if True:
                     details = "code: %s\n" % final_code
                     details += '\n'.join(msgs)
                     self._log(details)
-                    raise UserFeedback("Marvin reported %s.\nClick 'Show details' for more information."
-                                        % (final_status),
-                                       details=details, level=UserFeedback.WARN)
+                    self.user_feedback_after_callback = {
+                          'title': "Marvin reported %s" % final_status,
+                            'msg': ("Marvin reported %s.\nClick 'Show details' for more information."
+                                     % (final_status)),
+                        'det_msg': details
+                        }
 
                 self.ios.remove(self.status_fs)
 
