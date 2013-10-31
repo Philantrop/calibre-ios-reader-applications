@@ -2072,6 +2072,7 @@ if True:
         Marvin creates status.xml upon receiving command, increments <progress>
         from 0.0 to 1.0 as command progresses.
         '''
+        import traceback
         from threading import Timer
 
         self._log_location(command_name)
@@ -2080,7 +2081,8 @@ if True:
                                      self.status_fs))
 
         # Set initial watchdog timer for ACK
-        WATCHDOG_TIMEOUT = 10.0
+        WATCHDOG_TIMEOUT = 15.0
+        POLLING_DELAY = 1.0
         watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
         self.operation_timed_out = False
         watchdog.start()
@@ -2092,7 +2094,7 @@ if True:
                     self.ios.remove(self.status_fs)
                     raise UserFeedback("Marvin operation timed out.",
                                         details=None, level=UserFeedback.WARN)
-                time.sleep(0.10)
+                time.sleep(POLLING_DELAY)
                 Application.processEvents()
 
             else:
@@ -2120,6 +2122,7 @@ if True:
                         code = status.get('code')
                         timestamp = float(status.get('timestamp'))
                         if timestamp != current_timestamp:
+                            watchdog.cancel()
                             current_timestamp = timestamp
                             d = datetime.now()
                             progress = float(status.find('progress').text)
@@ -2133,17 +2136,27 @@ if True:
                                 self.report_progress(0.5 + progress/2, '')
 
                             # Reset watchdog timer
-                            watchdog.cancel()
                             watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
                             watchdog.start()
-                        time.sleep(0.10)
+                        time.sleep(POLLING_DELAY)
                         Application.processEvents()
 
                     except:
-                        time.sleep(0.10)
+                        watchdog.cancel()
+
+                        formatted_lines = traceback.format_exc().splitlines()
+                        current_error = formatted_lines[-1]
+
+                        time.sleep(POLLING_DELAY)
                         Application.processEvents()
 
-                        self._log("%s:  retry" % datetime.now().strftime('%H:%M:%S.%f'))
+                        self._log("{0}:  retry ({1})".format(
+                            datetime.now().strftime('%H:%M:%S.%f'),
+                            current_error))
+
+                        # Reset watchdog timer
+                        watchdog = Timer(WATCHDOG_TIMEOUT, self._watchdog_timed_out)
+                        watchdog.start()
 
                 # Command completed
                 watchdog.cancel()
