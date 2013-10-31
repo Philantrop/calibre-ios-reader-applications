@@ -1161,6 +1161,7 @@ if True:
         self.active_flags = {}
         self.malformed_books = []
         self.metadata_updates = []
+        self.rejected_books = []
         self.replaced_books = []
         self.skipped_books = []
         self.update_list = []
@@ -1358,8 +1359,16 @@ if True:
         self._localize_database_path(self.books_subpath)
 
         if (self.malformed_books or self.skipped_books or
-            self.metadata_updates or self.replaced_books):
+            self.metadata_updates or self.rejected_books or self.replaced_books):
             self._report_upload_results(len(files))
+
+        # Remove rejected books
+        for rb in self.rejected_books:
+            del self.cached_books[rb]
+            for nb in new_booklist:
+                if nb.path == rb:
+                    new_booklist.remove(nb)
+                    break
 
         return (new_booklist, [], [])
 
@@ -1739,21 +1748,32 @@ if True:
 
         title = "Send to device"
         total_added = (total_sent - len(self.malformed_books) - len(self.skipped_books) -
-                       len(self.replaced_books) - len(self.metadata_updates))
+                       len(self.replaced_books) - len(self.metadata_updates) -
+                       len(self.rejected_books))
         details = ''
         if total_added:
             details = "{0} {1} successfully added to Marvin.\n\n".format(total_added,
                                                           'books' if total_added > 1 else 'book')
 
-        if self.malformed_books:
+        if self.malformed_books or self.rejected_books:
             msg = ("Warnings reported while sending to Marvin.\n" +
                             "Click 'Show details' for a summary.\n")
 
-            details += u"The following malformed {0} not added to Marvin:\n".format(
-                        'books were' if len(self.malformed_books) > 1 else 'book was')
-            for book in self.malformed_books:
-                details += u" - '{0}' by {1}\n".format(book['title'],
-                                                      ','.join(book['authors']))
+            if self.malformed_books:
+                details += u"The following malformed {0} not added to Marvin:\n".format(
+                            'books were' if len(self.malformed_books) > 1 else 'book was')
+                for book in self.malformed_books:
+                    details += u" - '{0}' by {1}\n".format(book['title'],
+                                                          ','.join(book['authors']))
+
+            if self.rejected_books:
+                details += u"The following {0} rejected by Marvin:\n".format(
+                            'books were' if len(self.rejected_books) > 1 else 'book was')
+                for book in self.rejected_books:
+                    details +=  u" - '{0}' by {1}\n".format(
+                        self.cached_books[book]['title'],
+                        ', '.join(self.cached_books[book]['authors']))
+
             if self.skipped_books:
                 details += u"\nThe following {0} already installed in Marvin:\n".format(
                             'books were' if len(self.skipped_books) > 1 else 'book was')
@@ -2140,21 +2160,20 @@ if True:
 
                     messages = status.find('messages')
                     msgs = [msg.text for msg in messages]
+
+                    # Capture the rejected epubs to report
+                    for msg in msgs:
+                        self.rejected_books.append(re.search('\[(.+)\]', msg).group(1))
+
                     details = "code: %s\n" % final_code
                     details += '\n'.join(msgs)
                     self._log(details)
-                    self.user_feedback_after_callback = {
-                          'title': "Marvin reported %s" % final_status,
-                            'msg': ("Marvin reported %s.\nClick 'Show details' for more information."
-                                     % (final_status)),
-                        'det_msg': details
-                        }
 
                 self.ios.remove(self.status_fs)
 
                 self._log("%s: '%s' complete" %
-                                     (datetime.now().strftime('%H:%M:%S.%f'),
-                                      command_name))
+                          (datetime.now().strftime('%H:%M:%S.%f'),
+                           command_name))
                 break
 
         if self.report_progress is not None:
