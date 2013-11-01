@@ -1268,8 +1268,9 @@ if True:
                 # Detect unreplaceable covers, send <cover> if necessary
                 replaceable_cover = self._evaluate_replaceable_cover(fpath)
                 if not replaceable_cover:
-                    original_cover = self._evaluate_original_cover(metadata[i])
-                    if not original_cover:
+                    #original_cover = self._evaluate_original_cover(metadata[i])
+                    #if not original_cover:
+                    if True:
                         cover_tag = self._create_cover_element(metadata[i], upload_soup)
                         if cover_tag:
                             self._log("sending replacement cover for %s" % metadata[i].title)
@@ -1410,7 +1411,7 @@ if True:
         '''
         Return a <cover> element from mi
         '''
-        self._log_location()
+        #self._log_location()
         cover_tag = None
         if mi.has_cover and mi.cover:
             with open(mi.cover, 'rb') as f:
