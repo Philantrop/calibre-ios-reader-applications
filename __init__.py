@@ -463,6 +463,9 @@ class iOSReaderApp(DriverBase):
         _BCD.add(0x350)             # GSM (ME401LL/A)
         _BCD.add(0x360)             # GSM (Telstra AU)
 
+        _BCD.add(0x401)             # iPad Air WiFi
+        _BCD.add(0x402)             # iPad Air GSM
+
     '''     iPad  Mini     '''
     if True:
         _PRODUCT_ID.add(0x12ab)     # iPad Mini WiFi
@@ -490,7 +493,6 @@ class iOSReaderApp(DriverBase):
 
         _BCD.add(0x601)             # iPhone 5S (AT&T)
         _BCD.add(0x602)             # iPhone 5S (Telstra)
-
 
     '''     iPod     '''
     if True:
