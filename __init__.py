@@ -446,14 +446,14 @@ class iOSReaderApp(DriverBase):
         _PRODUCT_ID.add(0x12a3)     # iPad2 CDMA
         _BCD.add(0x230)             # Verizon
 
-        _PRODUCT_ID.add(0x12a5)     # iPad3 CDMA (Verizon)
-        _BCD.add(0x320)
-
         _PRODUCT_ID.add(0x12a9)     # iPad2 WiFi (2nd iteration)
         _BCD.add(0x240)
 
         _PRODUCT_ID.add(0x12a4)     # iPad3 WiFi
         _BCD.add(0x310)
+
+        _PRODUCT_ID.add(0x12a5)     # iPad3 CDMA (Verizon)
+        _BCD.add(0x320)
 
         _PRODUCT_ID.add(0x12a6)     # iPad3 GSM
         _BCD.add(0x330)
@@ -468,12 +468,10 @@ class iOSReaderApp(DriverBase):
 
     '''     iPad  Mini     '''
     if True:
-        _PRODUCT_ID.add(0x12ab)     # iPad Mini WiFi
-        _BCD.add(0x250)
-
-        _PRODUCT_ID.add(0x12ab)     # iPad Mini WiFi + cellular
-        _BCD.add(0x260)             # LTE Rogers (Canada)
-        _BCD.add(0x270)             # ???
+        #_PRODUCT_ID.add(0x12ab)
+        _BCD.add(0x250)             # iPad Mini WiFi
+        _BCD.add(0x260)             # iPad Mini GSM LTE Rogers (Canada)
+        _BCD.add(0x270)             # iPad Mini GSM ???
 
     '''     iPhone     '''
     if True:
