@@ -24,6 +24,20 @@ from calibre_plugins.ios_reader_apps import (Book, BookList,
     DatabaseMalformedException, DatabaseNotFoundException, InvalidEpub,
     iOSReaderApp, ReaderAppSignals)
 
+IOS_COMMUNICATION_ERROR_DETAILS = (
+    "Calibre is unable to communicate with your iDevice.\n\n" +
+    "Try the following:\n" +
+    " • Disconnect your iDevice\n" +
+    " • Perform a hard reset on your iDevice by holding " +
+    "the Home and Power buttons until you see the Apple " +
+    "logo, then release both buttons\n\n" +
+    " • Restart your computer\n" +
+    "Reconnect your iDevice and try again.\n\n" +
+    "If that does not resolve the problem, refer to the " +
+    "iOS reader applications plugin thread in the calibre " +
+    "Plugins forum at MobileRead.com for instructions " +
+    "on reporting an issue.")
+
 OCF_NS = 'urn:oasis:names:tc:opendocument:xmlns:container'
 OPF_NS = 'http://www.idpf.org/2007/opf'
 
@@ -319,7 +333,14 @@ if True:
                         this_book.series_index = 0.0
                     if this_book.series_index == 0.0 and this_book.series is None:
                         this_book.series_index = None
-                    _file_size = self.ios.stat('/'.join(['/Documents', this_book.path]))['st_size']
+
+                    try:
+                        _file_size = self.ios.stat('/'.join(['/Documents', this_book.path]))['st_size']
+                    except:
+                        raise UserFeedback("Error communicating with iDevice",
+                            details = IOS_COMMUNICATION_ERROR_DETAILS,
+                            level=UserFeedback.ERROR)
+
                     this_book.size = int(_file_size)
                     this_book.thumbnail = _get_marvin_cover(row[b'Hash'])
                     this_book.tags = _get_marvin_genres(cur, book_id)
