@@ -466,12 +466,13 @@ class iOSReaderApp(DriverBase):
         _BCD.add(0x401)             # iPad Air WiFi
         _BCD.add(0x402)             # iPad Air GSM
 
-    '''     iPad  Mini     '''
+    '''     iPad  Mini     (_PRODUCT_ID 0x12ab shared with iPad)   '''
     if True:
-        #_PRODUCT_ID.add(0x12ab)
         _BCD.add(0x250)             # iPad Mini WiFi
         _BCD.add(0x260)             # iPad Mini GSM LTE Rogers (Canada)
         _BCD.add(0x270)             # iPad Mini GSM ???
+        _BCD.add(0x403)             # iPad rMini GSM (a guess)
+        _BCD.add(0x404)             # iPad rMini WiFi
 
     '''     iPhone     '''
     if True:
