@@ -424,7 +424,7 @@ class iOSReaderApp(DriverBase):
     supported_platforms = ['linux', 'osx', 'windows']
     temp_dir = None
     verbose = None
-    version = (1, 2, 4)
+    version = (1, 2, 5)
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -490,6 +490,8 @@ class iOSReaderApp(DriverBase):
         _PRODUCT_ID.add(0x12a8)     # iPhone5 GSM
         _BCD.add(0x510)
         _BCD.add(0x520)             # GSM (Telefonica-Movistar Spain)
+
+        _BCD.add(0x530)             # 5C (Softbank Japan)
 
         _BCD.add(0x601)             # iPhone 5S (AT&T)
         _BCD.add(0x602)             # iPhone 5S (Telstra)
