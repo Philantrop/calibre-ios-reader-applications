@@ -58,9 +58,9 @@ READER_APP_ALIASES = {
                       'GoodReader': [b'com.goodiware.GoodReaderIPad', b'com.goodiware.GoodReader'],
                       'iBooks':     [b'com.apple.iBooks'],
                       'Kindle':     [b'com.amazon.Lassen'],
-                      'Marvin':     [b'com.appstafarian.Marvin',
-                                     b'com.appstafarian.MarvinIP',
-                                     b'com.appstafarian.MarvinIP-free']
+                      'Marvin':     [b'com.appstafarian.MarvinIP',
+                                     b'com.appstafarian.MarvinIP-free',
+                                     b'com.appstafarian.Marvin']
                      }
 
 class Book(Metadata):
@@ -424,7 +424,7 @@ class iOSReaderApp(DriverBase):
     supported_platforms = ['linux', 'osx', 'windows']
     temp_dir = None
     verbose = None
-    version = (1, 2, 5)
+    version = (1, 2, 6)
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
@@ -483,6 +483,9 @@ class iOSReaderApp(DriverBase):
 
         _PRODUCT_ID.add(0x1297)     # iPhone4 (Telus)
         _BCD.add(0x310)
+
+        _PRODUCT_ID.add(0x129c)     # iPhone4 (Verizon)
+        _BCD.add(0x330)
 
         _PRODUCT_ID.add(0x12a0)     # iPhone4S GSM
         _BCD.add(0x410)
