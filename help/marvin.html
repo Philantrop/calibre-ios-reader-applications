@@ -89,7 +89,6 @@
 <ol class="toc">
 <li class="toc"><a href="#basic_operations">Basic operations</a></li>
 <li class="toc"><a href="#replace_existing">Marvin Options</a></li>
-<li class="toc"><a href="#collection_assignments">Creating custom columns for collection assignments</a></li>
 <li class="toc"><a href="#advanced_operations-device">Advanced operations - Device view</a></li>
 <li class="toc"><a href="#advanced_operations-library">Advanced operations - Library view</a></li>
 <li class="toc"><a href="#faqs">Frequently Asked Questions</a></li>
@@ -100,10 +99,10 @@
 
 <div class="topic">
 <h4><a name="basic_operations" id="basic_operations"></a>1. <a href="#toc">Basic operations</a></h4>
-<p>The <em>iOS reader applications</em> device driver plugin enables USB communication between calibre and Marvin. </p>
-<p>With your iDevice connected to your computer via USB, start the Marvin application on your iDevice. From Marvin's Home  or Library screen, touch the cloud icon in the lower right corner, then touch  <strong>calibre connector</strong>. After a few seconds, Marvin's icon will be displayed in calibre's main toolbar, labeled <strong>Device</strong>.</p>
+<p>The <em>iOS reader applications</em> device driver plugin enables USB communication between calibre and Marvin.</p>
+<p>With your iDevice connected to your computer via USB, start the Marvin application on your iDevice. From Marvin's Home  or Library screen, touch <strong>Get books</strong> in the lower right corner, then touch <strong>calibre</strong>. The <strong>calibre connector</strong> dialog will be displayed on your iDevice. After a few seconds, Marvin's icon will be displayed in calibre's main toolbar, labeled <strong>Device</strong>. Marvin is now connected to calibre.</p>
 <p>In calibre's Library view, books with a checkmark in the <em>On Device</em> column are  also in Marvin's library. </p>
-<p>Clicking the Marvin icon switches to Device view. Books with a checkmark in the <em>In Library</em> column are also in your calibre library.</p>
+<p>Clicking the Marvin icon in the calibre toolbar switches to calibre's Device view. Books with a checkmark in the <em>In Library</em> column are also in your calibre library.</p>
 <table width="100%" border="1" class="operations">
   <caption>
   Basic operations
@@ -139,7 +138,8 @@
     <td>Book is opened from Marvin's library in calibre viewer.</td>
   </tr>
 </table>
-<p>To end the connection, touch <strong>Disconnect</strong> on your iDevice. The <strong>Device</strong> button will be removed from calibre's main toolbar, and Marvin returns to normal operation.</p>
+<p>To end the connection, touch <strong>Disconnect</strong> in the calibre connector dialog on your iDevice. The <strong>Device</strong> button will be removed from calibre's main toolbar, and Marvin returns to normal operation.</p>
+<p>For extended management of Marvin from calibre, install the <a href="http://www.mobileread.com/forums/showthread.php?t=221357">Marvin XD plugin</a>.</p>
 </div>
 
 <hr />
@@ -155,9 +155,14 @@
   <li><em>Update metadata:</em> Books that already exist in Marvin's library will be updated with new metadata from calibre, including covers and descriptions.<strong> </strong>If you have created and enabled a custom column for collection assignments, those assignments will be appended to existing collection assignments created in Marvin when updating metadata from calibre.</li>
   </ul>
   <p class="indent">If a book does not have a checkmark in calibre's <em>On Device</em> column, it will be added to Marvin as a new book, regardless of this setting.</p>
-<p><strong>Collections</strong></p>
-<p class="indent">Custom columns may be used to specify collection assignments when sending books to Marvin. See <a href="#creating_custom_columns">Creating custom columns for collection assignments</a> for details. Select one or more custom columns to be used for collection assignments. Collection assignments are applied when sending books to Marvin, replacing any existing collection assignments in Marvin.</p>
+<p><strong>Custom column assignments: Collections</strong></p>
+<p class="indent"><em>If you want to manage Marvin collections from calibre, it is highly recommended that you install and use the <a href="http://www.mobileread.com/forums/showthread.php?t=221357">Marvin XD plugin</a>, leaving the Collections combobox empty in this plugin.</em></p>
+<p class="indent">Custom columns may be used to specify collection assignments when sending books to Marvin. To create a custom column for collections, click the Wizard button. Collection assignments are applied when sending books to Marvin, replacing any existing collection assignments in Marvin.</p>
+<p><strong>Custom column assignments: Word count</strong></p>
+<p class="indent"><em>If you want to manage Marvin word counts from calibre, it is highly recommended that you install and use the <a href="http://www.mobileread.com/forums/showthread.php?t=221357">Marvin XD plugin</a>, leaving the Word count combobox empty in this plugin.</em></p>
+<p class="indent">By specifying a Word count column containing word counts for books in your calibre library, the word counts will be supplied to Marvin when sending books or updating metadata. To create a custom column for Word count, click the Wizard button.</p>
 <p><strong>Enable editing of Marvin collections in Device view</strong></p>
+<p class="indent"><em>If you want to manage Marvin collections from calibre, it is highly recommended that you install and use the <a href="http://www.mobileread.com/forums/showthread.php?t=221357">Marvin XD plugin</a>, which offers a wide variety of management options, leaving this checkbox unchecked.</em></p>
 <p class="indent">In Device view, the <em>Collections</em> column displays collection assignments, including Marvin's special collections <em>NEW</em>, <em>READING LIST</em> and <em>READ</em>. By default, the <em>Collections</em> column is a read-only view of the current collection assignments in Marvin. To enable editing of collection assignments in the Device view, enable this checkbox, then restart calibre. Edited collection assignments  are applied in Marvin immediately.</p>
 <p class="indent">If you are unable to edit collection assignments after enabling the checkbox and restarting calibre:</p>
 <ul>
@@ -170,43 +175,10 @@
 
 <hr />
 
-<div class="topic">
-<h4><a name="creating_custom_columns" id="supported_readers"></a>3. <a href="#toc">Creating custom columns for collection assignments</a></h4>
-<ul>
-  <li>Open <em>Preferences</em><em>&rarr;</em><em>Interface</em><em>&rarr;</em><em>Add your own columns</em>.</li>
-  <li>Click <strong>Add custom column</strong>.</li>
-  <li><em>Lookup name</em>: <span class="typed">collections</span>.</li>
-  <li><em>Column Heading:</em> <span class="typed">Marvin collections</span>.</li>
-  <li><em>Column type:</em> <span class="typed">Comma separated text, like tags, shown in the tag browser</span>. This provides an editable drop-down combo box allowing you to enter new values, or select previously entered values.
 
-    <div class="inset">
-      <p class="inset">Note: There are three types of custom columns that may be used for collection assignments:</p>
-    <ol>
-    <li class="inset">Comma separated text, like tags, shown in the tag browser.</li>
-    <li class="inset">Text, column shown in the tag browser.</li>
-    <li class="inset">Text, but with a fixed set of permitted values.</li>
-    </ol>
-    </div>
-  </li>
-
-  <li>Click <strong>Add custom column</strong>, then restart calibre.</li>
-  <li>Initiate the calibre connector in Marvin.</li>
-  <li>Click the down arrow next to the Marvin icon in calibre's main toolbar.</li>
-  <li>Click <strong>Configure this device</strong>.</li>
-  <li>Select <strong>Marvin</strong> as the preferred iOS reader application.</li>
-  <li>Select the <strong>Marvin Options</strong> tab.</li>
-  <li>In  <strong>Collections</strong>, enable <strong>Marvin collections</strong>.</li>
-  <li>You don't need to restart calibre after making this change.</li>
-  <li>In the main calibre library, select a book to send to Marvin.</li>
-  <li>In the <strong>Marvin collections</strong> column, type a comma-separated list of collection assignments. For example, <span class="typed">Vacation reading list, Work books</span>.</li>
-  <li>Send the book to Marvin.</li>
-</ul>
-</div>
-
-<hr />
 
 <div class="topic">
-<h4><a name="advanced_operations-device" id="advanced_operations-device"></a>4. <a href="#toc">Advanced operations - Device view</a></h4>
+<h4><a name="advanced_operations-device" id="advanced_operations-device"></a>3. <a href="#toc">Advanced operations - Device view</a></h4>
 <p>In Device view, all books installed in Marvin are visible. If <strong>Enable editing of Marvin collections in Device view</strong> is checked, you can directly edit Marvin's collection assignments for each book. Books that are also in your calibre library are marked with a checkmark in the <em>In Library</em> column. Changes made  to Marvin from the Device view do not affect calibre's Library view. </p>
 <table width="100%" border="1" class="operations">
   <caption>
@@ -229,7 +201,7 @@
 <hr />
 
 <div class="topic">
-<h4><a name="advanced_operations-library" id="advanced_operations-library"></a>5. <a href="#toc">Advanced operations - Library view</a></h4>
+<h4><a name="advanced_operations-library" id="advanced_operations-library"></a>4. <a href="#toc">Advanced operations - Library view</a></h4>
 <p>For books installed in both your calibre library and your Marvin library (indicated by a checkmark in the <em>On Device</em> column), you can refresh Marvin's metadata to match  calibre's metadata. To enable metadata updates, select <em>Update metadata</em> in <strong>When sending books already in Marvin.</strong></p>
 <p>If a book is <strong>checked</strong> in the <em>On Device</em> column, clicking <strong>Send to device</strong> will update the metadata in Marvin. </p>
 <p>If a book is <strong>unchecked</strong> in the <em>On Device</em> column, clicking <strong>Send to device</strong> will add the book to Marvin as a new book.</p>
@@ -295,7 +267,7 @@
  -->
 
 <div class="topic">
-<h4><a name="faqs" id="faqs"></a>6. <a href="#toc">Frequently Asked Questions</a></h4>
+<h4><a name="faqs" id="faqs"></a>5. <a href="#toc">Frequently Asked Questions</a></h4>
 <p><a name="faq_why_duplicates" id="faq_why_duplicates"></a><em>Why am I getting duplicate books in Marvin when I'm trying to update them?</em></p>
 <p class="indent">Upon initial connection with Marvin, calibre compares the metadata of books in your calibre library with books installed in Marvin. Books with matching metadata that are present in both your calibre library and Marvin are marked with a checkmark in calibre's <em>On Device</em> column.</p>
 <p class="indent">You may have the same book by the same author in both your calibre library and  Marvin, but because of differing metadata, calibre does not recognize them as the same books. These books will not have a checkmark in calibre's <em>On Device</em> column.</p>
@@ -304,6 +276,7 @@
 <p><a name="faq_why_not_recognized" id="faq_why_not_recognized"></a><em>Why doesn't calibre recognize books installed in Marvin as being the same books in my calibre library?</em></p>
 <p class="indent">Upon connection with Marvin, calibre compares the metadata of books in your library with books installed in Marvin. Any metadata mismatches will cause calibre to consider Marvin's copy of the book to be different than calibre's copy. The book will not have a checkmark in calibre's <em>On Device</em> column.</p>
 <p class="indent">Metadata mismatches may occur if you have edited the <em>Book Title</em> or <em>Author</em> fields in Marvin's metadata editor. Restoring these fields to values matching the <em>Title</em> and <em>Author(s)</em> fields in calibre should allow the book to be matched upon the next connection.</p>
+<p class="indent">For extended management of Marvin metadata, install the <a href="http://www.mobileread.com/forums/showthread.php?t=221357">Marvin XD plugin</a>.</p>
 <p><a name="faq_synchronize_copies" id="faq_synchronize_copies"></a><em>I have the same book installed in calibre and Marvin, but there's no checkmark in the On Device column. How can I get calibre to recognize them as the same book so I can update the metadata in Marvin?</em></p>
 <p class="indent">If you prefer to add the Marvin copy to calibre, because you have existing assets in Marvin that you don't want to lose, for example annotations, bookmarks, highlights, and Deep View content:</p>
 <ul>
@@ -323,24 +296,8 @@
 
 <p><a name="faq_update_collection_assignments" id="faq_update_collection_assignments"></a><em>How do I update metadata (including collection assignments created in calibre) for a group of books at the same time?</em></p>
 <ul>
-  <li>Connect to Marvin</li>
-  <li>In the main toolbar, click the down arrow next to the Marvin Device icon, select <strong>Configure this device</strong>.</li>
-  <li>In <em>Marvin Options</em>|<em>When sending books already in Marvin…</em>, select <strong>Update metadata</strong>.</li>
-  <li>In Library view, click in the search bar, then type <span class="typed">ondevice:true</span> to list only the books installed in Marvin.</li>
-  <li>Group-select the group of books you wish to update.</li>
-  <li>Click <strong>Send to device</strong> (<span class="typed">D</span>).</li>
-  <li>The current metadata will be applied to all selected books, including collection assignments created in calibre.</li>
-  <li><strong>Note:</strong> If you have created and enabled a custom column for collection assignments, those collection assignments will be appended to previously existing collections assigned in Marvin.</li>
-  </ul>
-
-<p><a name="faq_apply_same_collection_assignment" id="faq_apply_same_collection_assignment"></a><em>How do I apply the same collection assignment to a group of books?</em></p>
-<ul>
-  <li><a href="#creating_custom_columns">Create a custom column for Marvin collection assignments</a>.</li>
-  <li>Enable your custom column for collection assignments in Marvin Options.</li>
-  <li>Specify the collection assignment for each book.</li>
-  <li>Follow the directions in <a href="#faq_update_collection_assignments">How can I update collection assignments for a group of books at the same time?</a></li>
-  </ul>
-
+  <li>Use the <a href="http://www.mobileread.com/forums/showthread.php?t=221357">Marvin XD plugin</a>.</li>
+</ul>
 <p><a name="faq_manage_collections" id="faq_manage_collections"></a><em>How do I use calibre's 'Manage collections' feature?</em></p>
 <ul>
   <li>In Device view, right-click any book, then select <strong>Manage collections</strong>.</li>
