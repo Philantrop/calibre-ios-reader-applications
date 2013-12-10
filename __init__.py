@@ -32,6 +32,7 @@ from calibre.ebooks.metadata import (author_to_author_sort, authors_to_string,
 from calibre.ebooks.metadata.epub import get_metadata, set_metadata
 from calibre.ebooks.metadata.book.base import Metadata
 from calibre.gui2.device import device_signals
+from calibre.library import current_library_name
 from calibre.ptempfile import PersistentTemporaryDirectory
 from calibre.utils.config import config_dir, JSONConfig
 from calibre.utils.zipfile import ZipFile
@@ -1181,3 +1182,36 @@ class ReaderAppSignals(QObject):
     # device may have changed. See Marvin_overlays:initialize_overlay() and
     # _wait_for_command_completion() for typical usage.
     reader_app_status_changed = pyqtSignal(str)
+
+
+'''     Helper functions   '''
+
+def get_cc_mapping(cc_name, element, default=None):
+    '''
+    Return the element mapped to cc_name in prefs:cc_mappings
+    '''
+    if element not in ['field', 'combobox']:
+        raise ValueError("invalid element '{0}' requested for custom column '{1}'".format(
+            element, cc_name))
+
+    ans = default
+    cc_mappings = plugin_prefs.get('cc_mappings', {})
+    current_library = current_library_name()
+    if (current_library in cc_mappings and
+        cc_name in cc_mappings[current_library] and
+        element in cc_mappings[current_library][cc_name]):
+        ans = cc_mappings[current_library][cc_name][element]
+    return ans
+
+
+def set_cc_mapping(cc_name, field=None, combobox=None):
+    '''
+    Store element to cc_name in prefs:cc_mappings
+    '''
+    cc_mappings = plugin_prefs.get('cc_mappings', {})
+    current_library = current_library_name()
+    if current_library in cc_mappings:
+        cc_mappings[current_library][cc_name] = {'field': field, 'combobox': combobox}
+    else:
+        cc_mappings[current_library] = {cc_name: {'field': field, 'combobox': combobox}}
+    plugin_prefs.set('cc_mappings', cc_mappings)

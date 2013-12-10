@@ -22,7 +22,8 @@ from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.ios_reader_apps import (Book, BookList,
     DatabaseMalformedException, DatabaseNotFoundException, InvalidEpub,
-    iOSReaderApp, ReaderAppSignals)
+    iOSReaderApp, ReaderAppSignals,
+    get_cc_mapping, set_cc_mapping)
 
 IOS_COMMUNICATION_ERROR_DETAILS = (
     "Calibre is unable to communicate with your iDevice.\n\n" +
@@ -1506,12 +1507,15 @@ if True:
         this_book.thumbnail = thumb
         this_book.title_sort = metadata_x.title_sort
         this_book.word_count = None
-        wc_lookup = self.prefs.get('marvin_word_count_lookup')
+        wc_lookup = get_cc_mapping('marvin_word_count', 'field')
         if wc_lookup:
             try:
-                this_book.word_count = metadata.metadata_for_field("#%s" % wc_lookup)['#value#']
+                this_book.word_count = metadata.metadata_for_field(wc_lookup)['#value#']
             except:
-                pass
+                self._log("unable to retrieve metadata_for_field %s" % wc_lookup)
+                import traceback
+                self._log(traceback.format_exc())
+
         return this_book
 
     def _evaluate_original_cover(self, mi):
@@ -1608,7 +1612,7 @@ if True:
         self._log_location(mi.title)
 
         field_items = []
-        collection_field = self.prefs.get('marvin_collection_field', None)
+        collection_field = get_cc_mapping('marvin_collections', 'combobox')
         if collection_field:
             if verbose:
                 self._log("collection_field: %s" % collection_field)
@@ -1912,12 +1916,14 @@ if True:
         book_tag['title'] = escape(book.title)
         book_tag['titlesort'] = escape(book.title_sort)
         book_tag['uuid'] = book.uuid
-        wc_lookup = self.prefs.get('marvin_word_count_lookup')
+        wc_lookup = get_cc_mapping('marvin_word_count', 'field')
         if wc_lookup:
             try:
-                book_tag['wordcount'] = book.metadata_for_field("#%s" % wc_lookup)['#value#']
+                book_tag['wordcount'] = book.metadata_for_field(wc_lookup)['#value#']
             except:
-                pass
+                self._log("unable to retrieve metadata_for_field %s" % wc_lookup)
+                import traceback
+                self._log(traceback.format_exc())
 
         # Cover
         if book.has_cover:
@@ -1948,7 +1954,7 @@ if True:
         # Add the collections
         # If no custom column(s) for collections, preserve existing Marvin collection assignments
         # JSON switch 'marvin_merge_collections' controls whether to merge or replace existing collections
-        collection_fields = list(self.prefs.get('marvin_collection_field', ''))
+        collection_fields = list(get_cc_mapping('marvin_collections', 'combobox'))
         if collection_fields:
             if self.prefs.get('marvin_merge_collections', True):
                 # Append calibre collection assignments to existing Marvin collections, with existing flags

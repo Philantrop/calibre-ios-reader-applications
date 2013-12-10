@@ -14,6 +14,7 @@ from urllib2 import FileHandler
 
 from calibre.gui2 import open_url, warning_dialog
 from calibre.devices.usbms.driver import debug_print
+from calibre_plugins.ios_reader_apps import get_cc_mapping, set_cc_mapping
 from calibre_plugins.ios_reader_apps.config import widget_path
 
 from PyQt4.Qt import (QAbstractItemView, QCheckBox, QIcon, QLineEdit,
@@ -45,7 +46,6 @@ class PluginWidget(QWidget, Ui_Form):
             }
          }
 
-
     def __init__(self, parent):
         QWidget.__init__(self, parent=None)
         self.setupUi(self)
@@ -58,8 +58,13 @@ class PluginWidget(QWidget, Ui_Form):
     def collections_selection_changed(self, value):
         '''
         '''
-        cf = str(self.collections_comboBox.currentText())
-        self.prefs.set('marvin_collection_field', cf)
+        cf = unicode(self.collections_comboBox.currentText())
+        field = None
+        if cf:
+            datatype = self.WIZARD_PROFILES['Collections']['datatype']
+            eligible_collection_fields = self.get_eligible_custom_fields([datatype])
+            field = eligible_collection_fields[cf]
+        set_cc_mapping('marvin_collections', combobox=cf, field=field)
 
     def get_eligible_custom_fields(self, eligible_types=[], is_multiple=None):
         '''
@@ -103,11 +108,6 @@ class PluginWidget(QWidget, Ui_Form):
         # ~~~~~~ Populate/restore Collections comboBox ~~~~~~
         self.populate_collections()
         self.collections_comboBox.setToolTip("Custom column for Marvin collections")
-        cf = self.prefs.get('marvin_collection_field', None)
-        if cf:
-            idx = self.collections_comboBox.findText(cf)
-            if idx > -1:
-                self.collections_comboBox.setCurrentIndex(idx)
 
         # Hook changes to Collections
         self.collections_comboBox.currentIndexChanged.connect(self.collections_selection_changed)
@@ -120,11 +120,6 @@ class PluginWidget(QWidget, Ui_Form):
         # ~~~~~~ Populate/restore Word count comboBox ~~~~~~
         self.populate_word_count()
         self.word_count_comboBox.setToolTip("Custom column for Word count")
-        cf = self.prefs.get('marvin_word_count_field', None)
-        if cf:
-            idx = self.word_count_comboBox.findText(cf)
-            if idx > -1:
-                self.word_count_comboBox.setCurrentIndex(idx)
 
         # Hook changes to Word count
         self.word_count_comboBox.currentIndexChanged.connect(self.word_count_selection_changed)
@@ -134,11 +129,22 @@ class PluginWidget(QWidget, Ui_Form):
         self.word_count_wizard_tb.setToolTip('Create a custom column for Word count')
         self.word_count_wizard_tb.clicked.connect(partial(self.launch_cc_wizard, 'Word count'))
 
-
         # ~~~~~~ Help ~~~~~~
         # Add the Help icon to the help button
         self.help_button.setIcon(QIcon(I('help.png')))
         self.help_button.clicked.connect(self.show_help)
+
+        # Clean up JSON file < v1.3.0
+        prefs_version = self.prefs.get("plugin_version", "0.0.0")
+        if prefs_version < "1.3.0":
+            self._log("Updating prefs to %d.%d.%d" % self.parent.version)
+            for obsolete_setting in [
+                'marvin_collection_field', 'marvin_collection_lookup',
+                'marvin_word_count_field', 'marvin_word_count_lookup']:
+                if self.prefs.get(obsolete_setting, None) is not None:
+                    self._log("removing obsolete entry '{0}'".format(obsolete_setting))
+                    self.prefs.__delitem__(obsolete_setting)
+            self.prefs.set('plugin_version', "%d.%d.%d" % self.parent.version)
 
     def launch_cc_wizard(self, column_type):
         '''
@@ -179,7 +185,7 @@ class PluginWidget(QWidget, Ui_Form):
                         self.collections_comboBox.setCurrentIndex(idx)
 
                     # Save Collection field manually in case user cancels
-                    self.prefs.set('marvin_collection_field', destination)
+                    set_cc_mapping('marvin_collections', combobox=destination, field=label)
 
                 if source == 'Word count':
                     all_items = [str(self.word_count_comboBox.itemText(i))
@@ -195,8 +201,7 @@ class PluginWidget(QWidget, Ui_Form):
                         self.word_count_comboBox.setCurrentIndex(idx)
 
                     # Save Word count field manually in case user cancels
-                    self.prefs.set('marvin_word_count_field', destination)
-                    self.prefs.set('marvin_word_count_lookup', label)
+                    set_cc_mapping('marvin_word_count', combobox=destination, field=label)
 
     def options(self):
         '''
@@ -226,6 +231,12 @@ class PluginWidget(QWidget, Ui_Form):
         ecf = sorted(eligible_collection_fields.keys(), key=lambda s: s.lower())
         self.collections_comboBox.addItems(ecf)
 
+        # Retrieve stored value
+        existing = get_cc_mapping('marvin_collections', 'combobox')
+        if existing:
+            ci = self.collections_comboBox.findText(existing)
+            self.collections_comboBox.setCurrentIndex(ci)
+
     def populate_word_count(self):
         '''
         '''
@@ -234,6 +245,12 @@ class PluginWidget(QWidget, Ui_Form):
         self.word_count_comboBox.addItems([''])
         ecf = sorted(eligible_word_count_fields.keys(), key=lambda s: s.lower())
         self.word_count_comboBox.addItems(ecf)
+
+        # Retrieve stored value
+        existing = get_cc_mapping('marvin_word_count', 'combobox')
+        if existing:
+            ci = self.word_count_comboBox.findText(existing)
+            self.word_count_comboBox.setCurrentIndex(ci)
 
     def show_help(self):
         self._log_location()
@@ -244,17 +261,13 @@ class PluginWidget(QWidget, Ui_Form):
         '''
         Store both the displayed field name and lookup value to prefs
         '''
-        wcf_name = str(self.word_count_comboBox.currentText())
-        self.prefs.set('marvin_word_count_field', wcf_name)
-        if wcf_name == '':
-            self.prefs.set('marvin_word_count_lookup', '')
-        else:
-            for cf in self.gui.current_db.custom_field_keys():
-                cfn = self.gui.current_db.metadata_for_field(cf)['name']
-                if cfn == wcf_name:
-                    label = self.gui.current_db.metadata_for_field(cf)['label']
-                    self.prefs.set('marvin_word_count_lookup', label)
-                    break
+        cf = unicode(self.word_count_comboBox.currentText())
+        field = None
+        if cf:
+            datatype = self.WIZARD_PROFILES['Word count']['datatype']
+            eligible_word_count_fields = self.get_eligible_custom_fields([datatype])
+            field = eligible_word_count_fields[cf]
+        set_cc_mapping('marvin_word_count', combobox=cf, field=field)
 
     # ~~~~~~ Helpers ~~~~~~
     def _log(self, msg=None):

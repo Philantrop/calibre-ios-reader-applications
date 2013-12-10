@@ -44,6 +44,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self._log_location(app_list)
         self.setupUi(self)
         self.support_label.setOpenExternalLinks(True)
+        self.version = parent.version
 
         # Restore the debug settings
         self.debug_plugin.setChecked(self.prefs.get('debug_plugin', False))
