@@ -93,7 +93,6 @@ if True:
         self.staging_folder = '/'.join(['/Library', 'calibre'])
 
         self.books_subpath = '/Library/mainDb.sqlite'
-        self.covers_subpath = '/Library/Caches/com.appstafarian.marvin.covers'
         self.connected_fs = '/'.join([self.staging_folder, 'connected.xml'])
         self.flags = {
             'new': 'NEW',
@@ -108,6 +107,7 @@ if True:
             'ejected': False,
             'udid': 0
             }
+        self.marvin_version = (1,0,0)
         self.operation_timed_out = False
         self.path_template = '{0}.epub'
         self.status_fs = '/'.join([self.staging_folder, 'status.xml'])
@@ -194,10 +194,9 @@ if True:
 
         def _get_marvin_cover(book_hash):
             '''
-            Given book_hash, retrieve the associated small jpg cover from
-            covers_subpath
+            Given book_hash, retrieve the associated small jpg cover
             '''
-            cover_path = '/'.join([self.covers_subpath, '%s.jpg' % book_hash])
+            cover_path = '/'.join([self._cover_subpath(size="small"), '%s.jpg' % book_hash])
             cover_bytes = None
             stats = self.ios.exists(cover_path)
             if stats:
@@ -538,6 +537,11 @@ if True:
                 d = datetime.fromtimestamp(self.connection_timestamp)
                 if self.DEBUG_CAN_HANDLE:
                     self._log("   connection last refreshed %s" % (d.strftime('%Y-%m-%d %H:%M:%S')))
+
+                # Store Marvin version as tuple
+                mv = connection.get('marvin')
+                if mv:
+                    self.marvin_version = self._parse_version(mv)
 
                 self.ios_connection['connected'] = connection_live
 
@@ -1396,6 +1400,20 @@ if True:
         return (new_booklist, [], [])
 
     # helpers
+    def _cover_subpath(self, size="small"):
+        '''
+        Return subpath to covers in Marvin sandbox based on Marvin version.
+        '''
+        if size == "small":
+            ans = '/Library/Caches/com.appstafarian.marvin.covers'
+            if self.marvin_version > (2, 5, 64):
+                ans = '/Library/Application Support/com.appstafarian.marvin.covers'
+        elif size == 'large':
+            ans = '/Library/Caches/com.appstafarian.marvin.covers.l'
+            if self.marvin_version > (2, 5, 6):
+                ans = ' /Library/Application Support/com.appstafarian.marvin.covers.l'
+        return ans
+
     def _cover_to_thumb(self, metadata):
         '''
         Generate a cover thumb matching the size retrieved from Marvin's cover cache
@@ -1715,6 +1733,29 @@ if True:
 
         self.local_db_path = local_db_path
         return local_db_path
+
+    def _parse_version(self, marvin_version):
+        '''
+        Convert version strings of the form '1', '1.0', '1.0.0' to version tuple
+        '''
+        self._log_location(repr(marvin_version))
+        ans = (0, 0, 0)
+        mo = re.match('(?P<major>\d+)\.?(?P<minor>\d*)\.?(?P<iteration>\d*)$',
+            marvin_version)
+        if mo:
+            if mo.group('major') and mo.group('minor') and mo.group('iteration'):
+                ans = (int(mo.group('major')),
+                       int(mo.group('minor')),
+                       int(mo.group('iteration')))
+            elif mo.group('major') and mo.group('minor'):
+                ans = (int(mo.group('major')),
+                       int(mo.group('minor')),
+                       0)
+            elif mo.group('major'):
+                ans = (int(mo.group('major')),
+                       0,
+                       0)
+        return ans
 
     def _parse_xml(self, data):
         data = xml_to_unicode(data, strip_encoding_pats=True, assume_utf8=True,
