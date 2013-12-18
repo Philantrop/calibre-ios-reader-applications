@@ -542,6 +542,7 @@ if True:
                 mv = connection.get('marvin')
                 if mv:
                     self.marvin_version = self._parse_version(mv)
+                self._log("Marvin version: %s" % (repr(self.marvin_version)))
 
                 self.ios_connection['connected'] = connection_live
 
@@ -1738,7 +1739,7 @@ if True:
         '''
         Convert version strings of the form '1', '1.0', '1.0.0' to version tuple
         '''
-        self._log_location(repr(marvin_version))
+        #self._log_location(repr(marvin_version))
         ans = (0, 0, 0)
         mo = re.match('(?P<major>\d+)\.?(?P<minor>\d*)\.?(?P<iteration>\d*)$',
             marvin_version)
