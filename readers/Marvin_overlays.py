@@ -1405,14 +1405,16 @@ if True:
         '''
         Return subpath to covers in Marvin sandbox based on Marvin version.
         '''
-        if size == "small":
-            ans = '/Library/Caches/com.appstafarian.marvin.covers'
-            if self.marvin_version > (2, 5, 64):
+        if self.marvin_version > (2, 5, 64):
+            if size == 'small':
                 ans = '/Library/Application Support/com.appstafarian.marvin.covers'
-        elif size == 'large':
-            ans = '/Library/Caches/com.appstafarian.marvin.covers.l'
-            if self.marvin_version > (2, 5, 6):
+            elif size == 'large':
                 ans = ' /Library/Application Support/com.appstafarian.marvin.covers.l'
+        else:
+            if size == 'small':
+                ans = '/Library/Caches/com.appstafarian.marvin.covers'
+            elif size == 'large':
+                ans = '/Library/Caches/com.appstafarian.marvin.covers.l'
         return ans
 
     def _cover_to_thumb(self, metadata):
