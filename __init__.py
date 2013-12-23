@@ -496,6 +496,7 @@ class iOSReaderApp(DriverBase):
         _BCD.add(0x520)             # GSM (Telefonica-Movistar Spain)
 
         _BCD.add(0x530)             # 5C (Softbank Japan)
+        _BCD.add(0x540)             # 5C (???)
 
         _BCD.add(0x601)             # iPhone 5S (AT&T)
         _BCD.add(0x602)             # iPhone 5S (Telstra)
