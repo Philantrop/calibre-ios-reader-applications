@@ -1998,8 +1998,7 @@ if True:
         # Add the collections
         # If no custom column(s) for collections, preserve existing Marvin collection assignments
         # JSON switch 'marvin_merge_collections' controls whether to merge or replace existing collections
-        collection_fields = list(get_cc_mapping('marvin_collections', 'combobox'))
-        if collection_fields:
+        if get_cc_mapping('marvin_collections', 'combobox'):
             if self.prefs.get('marvin_merge_collections', True):
                 # Append calibre collection assignments to existing Marvin collections, with existing flags
                 cas = set(self.cached_books[target_epub]['device_collections'] + self._get_field_items(book))
