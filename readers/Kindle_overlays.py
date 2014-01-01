@@ -14,7 +14,8 @@ from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.usbms.books import BookList
 from calibre.utils.zipfile import ZipFile
 
-from calibre_plugins.ios_reader_apps import Book, iOSReaderApp
+from calibre_plugins.ios_reader_apps import (Book, iOSReaderApp,
+    KINDLE_ENABLED_FORMATS, KINDLE_SUPPORTED_FORMATS)
 
 if True:
     '''
@@ -44,10 +45,11 @@ if True:
         # Which metadata on books can be set via the GUI.
         self.CAN_SET_METADATA = []
 
+
         # ~~~~~~~~~ Variables ~~~~~~~~~
         self.busy = False
         self.documents_folder = b'/Documents'
-        self.format_map = ['mobi']
+        self.format_map = self.prefs.get('kindle_enabled_formats', KINDLE_ENABLED_FORMATS)
         self.ios_connection = {
             'app_installed': False,
             'connected': False,
@@ -55,7 +57,7 @@ if True:
             'ejected': False,
             'udid': 0
             }
-        self.path_template = '{0}.mobi'
+        self.path_template = '{0}.{1}'
         self.local_metadata = None
         self.remote_metadata = '/Library/calibre_metadata.sqlite'
 
@@ -734,10 +736,11 @@ if True:
             cur = con.cursor()
 
             for (i, fpath) in enumerate(files):
+                format = fpath.rpartition('.')[2].lower()
                 thumb = self._cover_to_thumb(metadata[i])
                 this_book = self._create_new_book(fpath, metadata[i], thumb)
                 new_booklist.append(this_book)
-                destination = '/'.join([self.documents_folder, self.path_template.format(metadata[i].title)])
+                destination = '/'.join([self.documents_folder, self.path_template.format(metadata[i].title, format)])
                 self.ios.copy_to_idevice(str(fpath), destination)
 
                 # Add to calibre_metadata db
@@ -837,7 +840,8 @@ if True:
         this_book.author_sort = metadata.author_sort
         this_book.dateadded = time.mktime(time.gmtime())
         this_book.datetime = datetime.fromtimestamp(this_book.dateadded).timetuple()
-        this_book.path = self.path_template.format(metadata.title)
+        this_book.path = self.path_template.format(metadata.title,
+            fpath.rpartition('.')[2].lower())
         this_book.size = os.path.getsize(fpath)
         this_book.thumbnail = self._cover_to_thumb(metadata)
         this_book.thumb_data = base64.b64encode(this_book.thumbnail)

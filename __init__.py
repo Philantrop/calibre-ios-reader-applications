@@ -64,6 +64,11 @@ READER_APP_ALIASES = {
                                      b'com.appstafarian.Marvin']
                      }
 
+# Default format maps for Kindle options panel
+KINDLE_ENABLED_FORMATS = ['MOBI']
+KINDLE_SUPPORTED_FORMATS = ['MOBI']
+
+
 class Book(Metadata):
     '''
     A simple class describing a book
@@ -425,7 +430,7 @@ class iOSReaderApp(DriverBase):
     supported_platforms = ['linux', 'osx', 'windows']
     temp_dir = None
     verbose = None
-    version = (1, 3, 2)
+    version = (1, 3, 3)
 
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
