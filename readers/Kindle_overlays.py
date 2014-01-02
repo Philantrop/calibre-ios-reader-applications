@@ -57,7 +57,7 @@ if True:
             'ejected': False,
             'udid': 0
             }
-        self.path_template = '{0}.{1}'
+        self.path_template = '{0}-{1}.{2}'
         self.local_metadata = None
         self.remote_metadata = '/Library/calibre_metadata.sqlite'
 
@@ -740,7 +740,7 @@ if True:
                 thumb = self._cover_to_thumb(metadata[i])
                 this_book = self._create_new_book(fpath, metadata[i], thumb)
                 new_booklist.append(this_book)
-                destination = '/'.join([self.documents_folder, self.path_template.format(metadata[i].title, format)])
+                destination = '/'.join([self.documents_folder, this_book.path])
                 self.ios.copy_to_idevice(str(fpath), destination)
 
                 # Add to calibre_metadata db
@@ -836,12 +836,12 @@ if True:
         from calibre.ebooks.metadata import authors_to_string
 
         self._log_location(metadata.title)
+        format = fpath.rpartition('.')[2].lower()
         this_book = Book(metadata.title, '; '.join(metadata.authors))
         this_book.author_sort = metadata.author_sort
         this_book.dateadded = time.mktime(time.gmtime())
         this_book.datetime = datetime.fromtimestamp(this_book.dateadded).timetuple()
-        this_book.path = self.path_template.format(metadata.title,
-            fpath.rpartition('.')[2].lower())
+        this_book.path = self.path_template.format(metadata.title, metadata.authors[0], format)
         this_book.size = os.path.getsize(fpath)
         this_book.thumbnail = self._cover_to_thumb(metadata)
         this_book.thumb_data = base64.b64encode(this_book.thumbnail)
