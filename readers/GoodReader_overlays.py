@@ -4,7 +4,7 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
-import base64, cStringIO, json, os, sqlite3, subprocess, time
+import base64, cStringIO, json, os, posixpath, sqlite3, subprocess, time
 from datetime import datetime
 
 from calibre.constants import islinux, isosx, iswindows
@@ -1008,7 +1008,7 @@ if True:
         files = self.ios.listdir(top_folder)
         for f in files:
             if files[f]['st_ifmt'] == 'S_IFREG':
-                file_list.append(f)
+                file_list.append(posixpath.normpath(f))
             elif files[f]['st_ifmt'] == 'S_IFDIR':
                 file_list = _get_nested_files(f, files[f], file_list)
         return file_list

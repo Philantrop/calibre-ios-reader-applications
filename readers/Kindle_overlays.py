@@ -49,7 +49,8 @@ if True:
         # ~~~~~~~~~ Variables ~~~~~~~~~
         self.busy = False
         self.documents_folder = b'/Documents'
-        self.format_map = self.prefs.get('kindle_enabled_formats', KINDLE_ENABLED_FORMATS)
+        fm = self.prefs.get('kindle_enabled_formats', KINDLE_ENABLED_FORMATS)
+        self.format_map = [fmt.lower() for fmt in fm]
         self.ios_connection = {
             'app_installed': False,
             'connected': False,
