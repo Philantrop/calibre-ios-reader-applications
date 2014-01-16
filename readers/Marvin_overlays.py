@@ -1409,7 +1409,7 @@ if True:
             if size == 'small':
                 ans = '/Library/Application Support/com.appstafarian.marvin.covers'
             elif size == 'large':
-                ans = ' /Library/Application Support/com.appstafarian.marvin.covers.l'
+                ans = '/Library/Application Support/com.appstafarian.marvin.covers.l'
         else:
             if size == 'small':
                 ans = '/Library/Caches/com.appstafarian.marvin.covers'
