@@ -571,7 +571,7 @@ if True:
 
         # Signal MM if disconnected
         if not self.ios_connection['connected']:
-            self.marvin_device_signals.reader_app_status_changed.emit("disconnected")
+            self.marvin_device_signals.reader_app_status_changed.emit({'cmd':'disconnected'})
 
         return self.ios_connection['connected']
 
@@ -798,7 +798,7 @@ if True:
         '''
         self._log_location()
         self.ios_connection['connected'] = False
-        self.marvin_device_signals.reader_app_status_changed.emit("yanked")
+        self.marvin_device_signals.reader_app_status_changed.emit({'cmd':'yanked'})
 
     def prepare_addable_books(self, paths):
         '''
@@ -1808,6 +1808,11 @@ if True:
         for book in pop_list:
             self.cached_books.pop(book)
 
+        # Inform MXD of removed path
+        self.marvin_device_signals.reader_app_status_changed.emit(
+            {'cmd':'remove_book', 'path': path})
+
+
     def _report_upload_results(self, total_sent):
         '''
         Display results of upload operation
@@ -2265,7 +2270,7 @@ if True:
 
         # Emit a signal for Marvin Manager
         if send_signal:
-            self.marvin_device_signals.reader_app_status_changed.emit(command_name)
+            self.marvin_device_signals.reader_app_status_changed.emit({'cmd':command_name})
 
     def _watchdog_timed_out(self):
         '''

@@ -1187,7 +1187,7 @@ class ReaderAppSignals(QObject):
     # This signal is emitted after I/O operations indicating content on the connected
     # device may have changed. See Marvin_overlays:initialize_overlay() and
     # _wait_for_command_completion() for typical usage.
-    reader_app_status_changed = pyqtSignal(str)
+    reader_app_status_changed = pyqtSignal(dict)
 
 
 '''     Helper functions   '''
