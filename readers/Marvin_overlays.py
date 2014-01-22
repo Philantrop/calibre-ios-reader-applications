@@ -620,6 +620,10 @@ if True:
         # Update local copy of mainDb
         self._localize_database_path(self.books_subpath)
 
+        # Inform MXD of removed paths
+        self.marvin_device_signals.reader_app_status_changed.emit(
+            {'cmd':'remove_books', 'paths': paths})
+
     def eject(self):
         '''
         Unmount/eject the device
@@ -1807,11 +1811,6 @@ if True:
         # Remove any books whose path changed
         for book in pop_list:
             self.cached_books.pop(book)
-
-        # Inform MXD of removed path
-        self.marvin_device_signals.reader_app_status_changed.emit(
-            {'cmd':'remove_book', 'path': path})
-
 
     def _report_upload_results(self, total_sent):
         '''
