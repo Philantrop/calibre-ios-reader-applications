@@ -1955,6 +1955,9 @@ if True:
         book_tag['publisher'] = ''
         if book.publisher is not None:
             book_tag['publisher'] = escape(book.publisher)
+        book_tag['rating'] = 0
+        if book.rating is not None:
+            book_tag['rating'] = book.rating/2
         book_tag['series'] = ''
         if book.series:
             book_tag['series'] = escape(book.series)
