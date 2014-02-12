@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>422</width>
-    <height>296</height>
+    <height>332</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -36,24 +36,41 @@
          </widget>
         </item>
         <item row="0" column="0">
-         <widget class="QLabel" name="label">
+         <widget class="QLabel" name="collections_label">
           <property name="text">
            <string>Collections</string>
           </property>
          </widget>
         </item>
-        <item row="1" column="0">
-         <widget class="QLabel" name="label_2">
+        <item row="2" column="0">
+         <widget class="QLabel" name="word_count_label">
           <property name="text">
            <string>Word count</string>
           </property>
          </widget>
         </item>
-        <item row="1" column="1">
+        <item row="2" column="1">
          <widget class="QComboBox" name="word_count_comboBox"/>
         </item>
-        <item row="1" column="2">
+        <item row="2" column="2">
          <widget class="QToolButton" name="word_count_wizard_tb">
+          <property name="text">
+           <string>...</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="0">
+         <widget class="QLabel" name="locked_label">
+          <property name="text">
+           <string>Locked</string>
+          </property>
+         </widget>
+        </item>
+        <item row="1" column="1">
+         <widget class="QComboBox" name="locked_comboBox"/>
+        </item>
+        <item row="1" column="2">
+         <widget class="QToolButton" name="locked_tb">
           <property name="text">
            <string>...</string>
           </property>
