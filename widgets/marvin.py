@@ -38,6 +38,12 @@ class PluginWidget(QWidget, Ui_Form):
             'display': {u'is_names': False},
             'is_multiple': True
             },
+        'Locked': {
+            'label': 'mm_locked',
+            'datatype': 'bool',
+            'display': {},
+            'is_multiple': False
+        },
         'Word count': {
             'label': 'mm_word_count',
             'datatype': 'int',
@@ -117,6 +123,18 @@ class PluginWidget(QWidget, Ui_Form):
         self.collections_wizard_tb.setToolTip("Create a custom column for Collections")
         self.collections_wizard_tb.clicked.connect(partial(self.launch_cc_wizard, 'Collections'))
 
+        # ~~~~~~ Populate/restore Locked comboBox ~~~~~~
+        self.populate_locked()
+        self.locked_comboBox.setToolTip("Custom column for Locked status")
+
+        # Hook changes to Locked
+        self.locked_comboBox.currentIndexChanged.connect(self.locked_selection_changed)
+
+        # Init the Locked wizard
+        self.locked_wizard_tb.setIcon(QIcon(I('wizard.png')))
+        self.locked_wizard_tb.setToolTip('Create a custom column for Locked status')
+        self.locked_wizard_tb.clicked.connect(partial(self.launch_cc_wizard, 'Locked'))
+
         # ~~~~~~ Populate/restore Word count comboBox ~~~~~~
         self.populate_word_count()
         self.word_count_comboBox.setToolTip("Custom column for Word count")
@@ -178,14 +196,34 @@ class PluginWidget(QWidget, Ui_Form):
                         all_items.remove(previous)
                     all_items.append(destination)
 
+                    self.collections_comboBox.blockSignals(True)
                     self.collections_comboBox.clear()
                     self.collections_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
                     idx = self.collections_comboBox.findText(destination)
                     if idx > -1:
                         self.collections_comboBox.setCurrentIndex(idx)
+                    self.collections_comboBox.blockSignals(False)
 
                     # Save Collection field manually in case user cancels
                     set_cc_mapping('marvin_collections', combobox=destination, field=label)
+
+                if source == 'Locked':
+                    all_items = [str(self.locked_comboBox.itemText(i))
+                                 for i in range(self.locked_comboBox.count())]
+                    if previous and previous in all_items:
+                        all_items.remove(previous)
+                    all_items.append(destination)
+
+                    self.locked_comboBox.blockSignals(True)
+                    self.locked_comboBox.clear()
+                    self.locked_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
+                    idx = self.locked_comboBox.findText(destination)
+                    if idx > -1:
+                        self.locked_comboBox.setCurrentIndex(idx)
+                    self.locked_comboBox.blockSignals(False)
+
+                    # Save Locked field manually in case user cancels
+                    set_cc_mapping('marvin_locked', combobox=destination, field=label)
 
                 if source == 'Word count':
                     all_items = [str(self.word_count_comboBox.itemText(i))
@@ -194,14 +232,28 @@ class PluginWidget(QWidget, Ui_Form):
                         all_items.remove(previous)
                     all_items.append(destination)
 
+                    self.word_count_comboBox.blockSignals(True)
                     self.word_count_comboBox.clear()
                     self.word_count_comboBox.addItems(sorted(all_items, key=lambda s: s.lower()))
                     idx = self.word_count_comboBox.findText(destination)
                     if idx > -1:
                         self.word_count_comboBox.setCurrentIndex(idx)
+                    self.word_count_comboBox.blockSignals(False)
 
                     # Save Word count field manually in case user cancels
                     set_cc_mapping('marvin_word_count', combobox=destination, field=label)
+
+    def locked_selection_changed(self, value):
+        '''
+        Store both the displayed field name and lookup value to prefs
+        '''
+        cf = unicode(self.locked_comboBox.currentText())
+        field = None
+        if cf:
+            datatype = self.WIZARD_PROFILES['Locked']['datatype']
+            eligible_locked_fields = self.get_eligible_custom_fields([datatype])
+            field = eligible_locked_fields[cf]
+        set_cc_mapping('marvin_locked', combobox=cf, field=field)
 
     def options(self):
         '''
@@ -236,6 +288,21 @@ class PluginWidget(QWidget, Ui_Form):
         if existing:
             ci = self.collections_comboBox.findText(existing)
             self.collections_comboBox.setCurrentIndex(ci)
+
+    def populate_locked(self):
+        '''
+        '''
+        datatype = self.WIZARD_PROFILES['Locked']['datatype']
+        eligible_locked_fields = self.get_eligible_custom_fields([datatype])
+        self.locked_comboBox.addItems([''])
+        ecf = sorted(eligible_locked_fields.keys(), key=lambda s: s.lower())
+        self.locked_comboBox.addItems(ecf)
+
+        # Retrieve stored value
+        existing = get_cc_mapping('marvin_locked', 'combobox')
+        if existing:
+            ci = self.locked_comboBox.findText(existing)
+            self.locked_comboBox.setCurrentIndex(ci)
 
     def populate_word_count(self):
         '''

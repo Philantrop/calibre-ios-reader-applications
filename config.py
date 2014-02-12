@@ -97,6 +97,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self.reader_apps.currentIndexChanged.connect(self.show_plugin_tab)
         self.show_plugin_tab(None)
 
+        #self.resize(self.sizeHint())
     """
     def restart_required(self, *args):
         self._log_location()
