@@ -1281,9 +1281,12 @@ if True:
 
             if not metadata_only:
                 # Create <book> for manifest with filename=, coverhash=
+                # Optional attributes locked=, wordcount=
                 book_tag = Tag(upload_soup, 'book')
                 book_tag['filename'] = this_book.path
                 book_tag['coverhash'] = this_book.cover_hash
+                if this_book.locked:
+                    book_tag['locked'] = 'true'
                 if this_book.word_count:
                     book_tag['wordcount'] = this_book.word_count
 
@@ -1531,6 +1534,19 @@ if True:
         this_book.tags = metadata_x.tags
         this_book.thumbnail = thumb
         this_book.title_sort = metadata_x.title_sort
+
+        # Get optional locked status
+        this_book.locked = None
+        locked_lookup = get_cc_mapping('marvin_locked', 'field')
+        if locked_lookup:
+            try:
+                this_book.locked = metadata.metadata_for_field(locked_lookup)['#value#']
+            except:
+                self._log("unable to retrieve metadata_for_field %s" % locked_lookup)
+                import traceback
+                self._log(traceback.format_exc())
+
+        # Get optional word_count
         this_book.word_count = None
         wc_lookup = get_cc_mapping('marvin_word_count', 'field')
         if wc_lookup:
@@ -1967,6 +1983,26 @@ if True:
         book_tag['title'] = escape(book.title)
         book_tag['titlesort'] = escape(book.title_sort)
         book_tag['uuid'] = book.uuid
+
+        # Add optional Locked status
+        locked_lookup = get_cc_mapping('marvin_locked', 'field')
+        if locked_lookup:
+            locked_tag = Tag(update_soup, 'locked')
+            try:
+                # [True, False, None]
+                locked = book.metadata_for_field(locked_lookup)['#value#']
+                if locked:
+                    locked_tag.insert(0, 'true')
+                else:
+                    locked_tag.insert(0, 'false')
+                book_tag.insert(0, locked_tag)
+
+            except:
+                self._log("unable to retrieve metadata_for_field %s" % locked_lookup)
+                import traceback
+                self._log(traceback.format_exc())
+
+        # Add optional Word count value
         wc_lookup = get_cc_mapping('marvin_word_count', 'field')
         if wc_lookup:
             try:

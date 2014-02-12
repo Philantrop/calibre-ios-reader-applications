@@ -43,7 +43,7 @@ class PluginWidget(QWidget, Ui_Form):
             'datatype': 'bool',
             'display': {},
             'is_multiple': False
-        },
+            },
         'Word count': {
             'label': 'mm_word_count',
             'datatype': 'int',
