@@ -1987,16 +1987,13 @@ if True:
         # Add optional Locked status
         locked_lookup = get_cc_mapping('marvin_locked', 'field')
         if locked_lookup:
-            locked_tag = Tag(update_soup, 'locked')
             try:
                 # [True, False, None]
                 locked = book.metadata_for_field(locked_lookup)['#value#']
                 if locked:
-                    locked_tag.insert(0, 'true')
+                    book_tag['locked'] = 'true'
                 else:
-                    locked_tag.insert(0, 'false')
-                book_tag.insert(0, locked_tag)
-
+                    book_tag['locked'] = 'false'
             except:
                 self._log("unable to retrieve metadata_for_field %s" % locked_lookup)
                 import traceback
