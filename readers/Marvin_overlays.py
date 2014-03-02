@@ -2103,10 +2103,14 @@ if True:
             else:
                 self._log(command_soup.prettify())
 
-        self.ios.write(command_soup.renderContents(),
-                       b'/'.join([self.staging_folder, b'%s.tmp' % command_name]))
-        self.ios.rename(b'/'.join([self.staging_folder, b'%s.tmp' % command_name]),
-                        b'/'.join([self.staging_folder, b'%s.xml' % command_name]))
+        # Make sure there is no orphan status.xml
+        if self.ios.exists(self.connected_device.status_fs):
+            self.ios.remove(self.connected_device.status_fs)
+
+        tmp = b'/'.join([self.staging_folder, b'%s.tmp' % command_name])
+        final = b'/'.join([self.staging_folder, b'%s.xml' % command_name])
+        self.ios.write(command_soup.renderContents(), tmp)
+        self.ios.rename(tmp, final)
 
     def _update_epub_metadata(self, fpath, metadata):
         '''
