@@ -2111,8 +2111,8 @@ if True:
                 self._log(command_soup.prettify())
 
         # Make sure there is no orphan status.xml
-        if self.ios.exists(self.connected_device.status_fs):
-            self.ios.remove(self.connected_device.status_fs)
+        if self.ios.exists(self.status_fs):
+            self.ios.remove(self.status_fs)
 
         tmp = b'/'.join([self.staging_folder, b'%s.tmp' % command_name])
         final = b'/'.join([self.staging_folder, b'%s.xml' % command_name])
