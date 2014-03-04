@@ -334,14 +334,20 @@ if True:
                     if this_book.series_index == 0.0 and this_book.series is None:
                         this_book.series_index = None
 
+                    """
                     try:
                         _file_size = self.ios.stat('/'.join(['/Documents', this_book.path]))['st_size']
                     except:
                         raise UserFeedback("Error communicating with iDevice",
                             details = IOS_COMMUNICATION_ERROR_DETAILS,
                             level=UserFeedback.ERROR)
+                    """
+                    _file_size = self.ios.stat('/'.join(['/Documents', this_book.path]))
+                    if not _file_size:
+                        self._log("*** Error: File listed in mainDb, not found in /Documents: {0} ***".format(this_book.path))
+                        continue
 
-                    this_book.size = int(_file_size)
+                    this_book.size = int(_file_size['st_size'])
                     this_book.thumbnail = _get_marvin_cover(row[b'Hash'])
                     this_book.tags = _get_marvin_genres(cur, book_id)
                     this_book.title_sort = row[b'CalibreTitleSort']
@@ -366,6 +372,7 @@ if True:
                         'publisher': this_book.publisher,
                         'series': this_book.series,
                         'series_index': this_book.series_index,
+                        'size': this_book.size,
                         'tags': this_book.tags,
                         'title': this_book.title,
                         'title_sort': this_book.title_sort,
