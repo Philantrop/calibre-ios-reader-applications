@@ -13,8 +13,9 @@ Source for this plugin is available as a Github repository at
 https://github.com/GRiker/calibre-apple-reader-applications,
 which also includes an overview of the communication protocol in README.md
 """
-import cStringIO, imp, os, platform, re, sqlite3, sys, tempfile, time
+import base64, cStringIO, datetime, imp, os, platform, re, sqlite3, sys, tempfile, time
 
+from collections import namedtuple
 from inspect import getmembers, isfunction
 from PIL import Image as PILImage
 from types import MethodType
@@ -74,9 +75,35 @@ class Book(Metadata):
     A simple class describing a book
     See ebooks.metadata.book.base #46
     '''
+    # 13 standard field keys from Metadata
+    iosra_standard_keys = ['author_sort', 'authors', 'comments', 'device_collections',
+                           'pubdate', 'publisher', 'rating', 'series', 'series_index',
+                           'tags', 'title', 'title_sort', 'uuid']
+    # 6 private field keys
+    iosra_custom_keys = ['cover_hash','datetime','description','path','size','thumbnail']
+
+    def __eq__(self, other):
+        all_mxd_keys = self.iosra_standard_keys + self.iosra_custom_keys
+        for attr in all_mxd_keys:
+            v1, v2 = [getattr(obj, attr, object()) for obj in [self, other]]
+            if v1 is object() or v2 is object():
+                return False
+            elif v1 != v2:
+                return False
+        return True
+
     def __init__(self, title, author):
         Metadata.__init__(self, title, authors=[author])
 
+    def __ne__(self, other):
+        all_mxd_keys = self.iosra_standard_keys + self.iosra_custom_keys
+        for attr in all_mxd_keys:
+            v1, v2 = [getattr(obj, attr, object()) for obj in [self, other]]
+            if v1 is object() or v2 is object():
+                return True
+            elif v1 != v2:
+                return True
+        return False
     @property
     def title_sorter(self):
         return title_sort(self.title)
@@ -102,10 +129,31 @@ class BookList(CollectionsBookList):
     __getslice__ = None
     __setslice__ = None
 
+    def __eq__(self, other):
+        all_mxd_keys = Book.iosra_standard_keys + Book.iosra_custom_keys
+        for x in range(len(self)):
+            for attr in all_mxd_keys:
+                v1, v2 = [getattr(obj, attr, None) for obj in [self[x], other[x]]]
+                if v1 is object() or v2 is object():
+                    return False
+                elif v1 != v2:
+                    return False
+        return True
+
     def __init__(self, parent):
         self.parent = parent
         self.verbose = parent.verbose
         #self._log_location()
+
+    def __ne__(self, other):
+        all_mxd_keys = Book.iosra_standard_keys + Book.iosra_custom_keys
+        for attr in all_mxd_keys:
+            v1, v2 = [getattr(obj, attr, object()) for obj in [self, other]]
+            if v1 is object() or v2 is object():
+                return True
+            elif v1 != v2:
+                return True
+        return False
 
     def supports_collections(self):
         ''' Return True if the the device supports collections for this book list. '''
@@ -1191,6 +1239,29 @@ class ReaderAppSignals(QObject):
 
 
 '''     Helper functions   '''
+def from_json(obj):
+    '''
+    Models calibre.utils.config:from_json
+    uses local parse_date()
+    '''
+    if '__class__' in obj:
+        if obj['__class__'] == 'bytearray':
+            return bytearray(base64.standard_b64decode(obj['__value__']))
+        if obj['__class__'] == 'datetime.datetime':
+            return parse_date(obj['__value__'])
+        if obj['__class__'] == 'time.struct_time':
+            StructTime = namedtuple('StructTime', 'tm_year tm_mon tm_mday tm_hour tm_min tm_sec tm_wday tm_yday tm_isdst')
+            return time.struct_time(StructTime(obj['__value__']['tm_year'],
+                                               obj['__value__']['tm_mon'],
+                                               obj['__value__']['tm_mday'],
+                                               obj['__value__']['tm_hour'],
+                                               obj['__value__']['tm_min'],
+                                               obj['__value__']['tm_sec'],
+                                               obj['__value__']['tm_wday'],
+                                               obj['__value__']['tm_yday'],
+                                               obj['__value__']['tm_isdst']))
+    return obj
+
 
 def get_cc_mapping(cc_name, element, default=None):
     '''
@@ -1210,6 +1281,25 @@ def get_cc_mapping(cc_name, element, default=None):
     return ans
 
 
+def isoformat(date_time, sep='T'):
+    '''
+    Mocks calibre.utils.date:isoformat()
+    '''
+    return unicode(date_time.isoformat(str(sep)))
+
+
+def parse_date(date_string):
+    '''
+    Mocks calibre.utils.date:parse_date()
+    https://labix.org/python-dateutil#head-42a94eedcff96da7fb1f77096b5a3b519c859ba9
+    '''
+    UNDEFINED_DATE = datetime.datetime(101,1,1, tzinfo=None)
+    from dateutil.parser import parse
+    if not date_string:
+        return UNDEFINED_DATE
+    return parse(date_string, ignoretz=True)
+
+
 def set_cc_mapping(cc_name, field=None, combobox=None):
     '''
     Store element to cc_name in prefs:cc_mappings
@@ -1221,3 +1311,30 @@ def set_cc_mapping(cc_name, field=None, combobox=None):
     else:
         cc_mappings[current_library] = {cc_name: {'field': field, 'combobox': combobox}}
     plugin_prefs.set('cc_mappings', cc_mappings)
+
+
+def to_json(obj):
+    '''
+    Models calibre.utils.config:to_json
+    Uses local isoformat()
+    '''
+    if isinstance(obj, bytearray):
+        return {'__class__': 'bytearray',
+                '__value__': base64.standard_b64encode(bytes(obj))}
+    if isinstance(obj, datetime.datetime):
+        return {'__class__': 'datetime.datetime',
+                '__value__': isoformat(obj)}
+    if isinstance(obj, time.struct_time):
+        return {'__class__': 'time.struct_time',
+                '__value__': {'tm_year': obj.tm_year,
+                              'tm_mon': obj.tm_mon,
+                              'tm_mday': obj.tm_mday,
+                              'tm_hour': obj.tm_hour,
+                              'tm_min': obj.tm_min,
+                              'tm_sec': obj.tm_sec,
+                              'tm_wday': obj.tm_wday,
+                              'tm_yday': obj.tm_yday,
+                              'tm_isdst': obj.tm_isdst}
+               }
+    raise TypeError(repr(obj) + ' is not JSON serializable')
+

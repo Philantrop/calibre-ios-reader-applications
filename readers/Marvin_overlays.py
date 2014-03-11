@@ -4,7 +4,7 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
-import base64, copy, cStringIO, hashlib, locale, os, posixpath, re, sqlite3, time
+import base64, copy, cStringIO, hashlib, json, locale, os, posixpath, re, sqlite3, time
 from datetime import datetime
 from lxml import etree, html
 
@@ -15,15 +15,16 @@ from calibre.ebooks.BeautifulSoup import BeautifulStoneSoup, Tag
 from calibre.ebooks.chardet import xml_to_unicode
 from calibre.ebooks.oeb.parse_utils import RECOVER_PARSER
 from calibre.gui2 import Application
+from calibre.ptempfile import TemporaryFile
 from calibre.utils.config import prefs
 from calibre.utils.icu import sort_key
 from calibre.utils.magick.draw import thumbnail
-from calibre.utils.zipfile import ZipFile
+from calibre.utils.zipfile import ZipFile, ZIP_STORED
 
 from calibre_plugins.ios_reader_apps import (Book, BookList,
     DatabaseMalformedException, DatabaseNotFoundException, InvalidEpub,
     iOSReaderApp, ReaderAppSignals,
-    get_cc_mapping, set_cc_mapping)
+    from_json, get_cc_mapping, set_cc_mapping, to_json)
 
 IOS_COMMUNICATION_ERROR_DETAILS = (
     "Calibre is unable to communicate with your iDevice.\n\n" +
@@ -82,6 +83,7 @@ if True:
         self.DEBUG_CAN_HANDLE = self.prefs.get('debug_can_handle', False)
         self.DEVICE_PLUGBOARD_NAME = 'MARVIN'
 
+        self.REMOTE_CACHE_FOLDER = '/'.join(['/Library', 'calibre.mm'])
         # Height for thumbnails on the device
         self.THUMBNAIL_HEIGHT = 675
         self.WANTS_UPDATED_THUMBNAILS = True
@@ -245,141 +247,154 @@ if True:
             return collections
 
         # Entry point
+
         booklist = BookList(self)
+
         if not oncard:
             self._log_location()
-            cached_books = {}
 
             # Fetch current metadata from Marvin's DB
-            local_db_path = self._localize_database_path(self.books_subpath)
-            con = sqlite3.connect(local_db_path)
+            self._localize_database_path(self.books_subpath)
+            cached_books = {}
 
-            with con:
-                con.row_factory = sqlite3.Row
+            booklist = self._restore_from_snapshot()
+            if not booklist:
+                # booklist is an empty BookList() object returned from _restore_from_snapshot()
+                self._log("generating new booklist from connected device")
 
-                # Build a collection map
-                collections_cur = con.cursor()
-                collections_cur.execute('''SELECT
-                                            ID,
-                                            Name
-                                           FROM Collections
-                                        ''')
-                rows = collections_cur.fetchall()
-                collection_map = {}
-                for row in rows:
-                    collection_map[row[b'ID']] = row[b'Name']
-                collections_cur.close()
+                con = sqlite3.connect(self.local_db_path)
+                with con:
+                    con.row_factory = sqlite3.Row
 
-                # Get the books
-                cur = con.cursor()
-                try:
-                    cur.execute('''SELECT
-                                    Author,
-                                    AuthorSort,
-                                    Books.ID as id_,
-                                    CalibreCoverHash,
-                                    CalibreSeries,
-                                    CalibreSeriesIndex,
-                                    CalibreTitleSort,
-                                    DateAdded,
-                                    DatePublished,
-                                    Description,
-                                    FileName,
-                                    Hash,
-                                    IsRead,
-                                    NewFlag,
-                                    Publisher,
-                                    ReadingList,
-                                    Title,
-                                    UUID
-                                  FROM Books
-                                ''')
-                except:
+                    # Build a collection map
+                    collections_cur = con.cursor()
+                    collections_cur.execute('''SELECT
+                                                ID,
+                                                Name
+                                               FROM Collections
+                                            ''')
+                    rows = collections_cur.fetchall()
+                    collection_map = {}
+                    for row in rows:
+                        collection_map[row[b'ID']] = row[b'Name']
+                    collections_cur.close()
+
+                    # Get the books
+                    cur = con.cursor()
+                    try:
+                        cur.execute('''SELECT
+                                        Author,
+                                        AuthorSort,
+                                        Books.ID as id_,
+                                        CalibreCoverHash,
+                                        CalibreSeries,
+                                        CalibreSeriesIndex,
+                                        CalibreTitleSort,
+                                        DateAdded,
+                                        DatePublished,
+                                        Description,
+                                        FileName,
+                                        Hash,
+                                        IsRead,
+                                        NewFlag,
+                                        Publisher,
+                                        ReadingList,
+                                        Title,
+                                        UUID
+                                      FROM Books
+                                    ''')
+                    except:
+                        cur.close()
+                        # Invalidate local_db_path so Marvin Manager knows
+                        self.local_db_path = None
+                        self.cached_books = {}
+                        raise DatabaseMalformedException("Marvin database is damaged")
+
+                    rows = cur.fetchall()
+                    book_count = len(rows)
+                    for i, row in enumerate(rows):
+                        book_id = row[b'id_']
+
+                        # Get the primary metadata from Books
+                        this_book = Book(row[b'Title'], row[b'Author'])
+                        this_book.author_sort = row[b'AuthorSort']
+                        this_book.cover_hash = row[b'CalibreCoverHash']
+                        _date_added = row[b'DateAdded']
+                        this_book.datetime = datetime.fromtimestamp(int(_date_added)).timetuple()
+                        this_book.description = row[b'Description']
+                        this_book.device_collections = _get_marvin_collections(cur, book_id, row)
+                        this_book.path = row[b'FileName']
+
+                        try:
+                            pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
+                            pubdate = pubdate.replace(hour=0, minute=0, second=0)
+                        except:
+                            pubdate = None
+                        this_book.pubdate = pubdate
+
+                        this_book.publisher = row[b'Publisher']
+                        this_book.series = row[b'CalibreSeries']
+                        if this_book.series == '':
+                            this_book.series = None
+                        try:
+                            this_book.series_index = float(row[b'CalibreSeriesIndex'])
+                        except:
+                            this_book.series_index = 0.0
+                        if this_book.series_index == 0.0 and this_book.series is None:
+                            this_book.series_index = None
+
+                        """
+                        try:
+                            _file_size = self.ios.stat('/'.join(['/Documents', this_book.path]))['st_size']
+                        except:
+                            raise UserFeedback("Error communicating with iDevice",
+                                details = IOS_COMMUNICATION_ERROR_DETAILS,
+                                level=UserFeedback.ERROR)
+                        """
+                        _file_size = self.ios.stat('/'.join(['/Documents', this_book.path]))
+                        if not _file_size:
+                            self._log("*** Error: File listed in mainDb, not found in /Documents: {0} ***".format(this_book.path))
+                            continue
+
+                        this_book.size = int(_file_size['st_size'])
+                        this_book.thumbnail = _get_marvin_cover(row[b'Hash'])
+                        this_book.tags = _get_marvin_genres(cur, book_id)
+                        this_book.title_sort = row[b'CalibreTitleSort']
+                        this_book.uuid = row[b'UUID']
+
+                        booklist.add_book(this_book, False)
+
+                        if self.report_progress is not None:
+                            self.report_progress(float((i + 1)*100 / book_count)/100,
+                                '%(num)d of %(tot)d' % dict(num=i + 1, tot=book_count))
+
+
                     cur.close()
-                    # Invalidate local_db_path so Marvin Manager knows
-                    self.local_db_path = None
-                    self.cached_books = {}
-                    raise DatabaseMalformedException("Marvin database is damaged")
 
-                rows = cur.fetchall()
-                book_count = len(rows)
-                for i, row in enumerate(rows):
-                    book_id = row[b'id_']
+                    # Snapshot booklist for optimized reload
+                    self._snapshot_booklist(booklist, self._profile_db())
 
-                    # Get the primary metadata from Books
-                    this_book = Book(row[b'Title'], row[b'Author'])
-                    this_book.author_sort = row[b'AuthorSort']
-                    this_book.cover_hash = row[b'CalibreCoverHash']
-                    _date_added = row[b'DateAdded']
-                    this_book.datetime = datetime.fromtimestamp(int(_date_added)).timetuple()
-                    this_book.description = row[b'Description']
-                    this_book.device_collections = _get_marvin_collections(cur, book_id, row)
-                    this_book.path = row[b'FileName']
-
-                    try:
-                        pubdate = datetime.utcfromtimestamp(int(row[b'DatePublished']))
-                        pubdate = pubdate.replace(hour=0, minute=0, second=0)
-                    except:
-                        pubdate = None
-                    this_book.pubdate = pubdate
-
-                    this_book.publisher = row[b'Publisher']
-                    this_book.series = row[b'CalibreSeries']
-                    if this_book.series == '':
-                        this_book.series = None
-                    try:
-                        this_book.series_index = float(row[b'CalibreSeriesIndex'])
-                    except:
-                        this_book.series_index = 0.0
-                    if this_book.series_index == 0.0 and this_book.series is None:
-                        this_book.series_index = None
-
-                    """
-                    try:
-                        _file_size = self.ios.stat('/'.join(['/Documents', this_book.path]))['st_size']
-                    except:
-                        raise UserFeedback("Error communicating with iDevice",
-                            details = IOS_COMMUNICATION_ERROR_DETAILS,
-                            level=UserFeedback.ERROR)
-                    """
-                    _file_size = self.ios.stat('/'.join(['/Documents', this_book.path]))
-                    if not _file_size:
-                        self._log("*** Error: File listed in mainDb, not found in /Documents: {0} ***".format(this_book.path))
-                        continue
-
-                    this_book.size = int(_file_size['st_size'])
-                    this_book.thumbnail = _get_marvin_cover(row[b'Hash'])
-                    this_book.tags = _get_marvin_genres(cur, book_id)
-                    this_book.title_sort = row[b'CalibreTitleSort']
-                    this_book.uuid = row[b'UUID']
-
-                    booklist.add_book(this_book, False)
-
-                    if self.report_progress is not None:
-                        self.report_progress(float((i + 1)*100 / book_count)/100,
-                            '%(num)d of %(tot)d' % dict(num=i + 1, tot=book_count))
-
-                    # Manage collections may change this_book.device_collections,
-                    # so we need to make a copy of it for testing during rebuild_collections
-                    cached_books[this_book.path] = {
-                        'author': this_book.author,
-                        'authors': this_book.authors,
-                        'author_sort': this_book.author_sort,
-                        'cover_hash': this_book.cover_hash,
-                        'description': this_book.description,
-                        'device_collections': copy.copy(this_book.device_collections),
-                        'pubdate': this_book.pubdate,
-                        'publisher': this_book.publisher,
-                        'series': this_book.series,
-                        'series_index': this_book.series_index,
-                        'size': this_book.size,
-                        'tags': this_book.tags,
-                        'title': this_book.title,
-                        'title_sort': this_book.title_sort,
-                        'uuid': this_book.uuid,
-                        }
-
-                cur.close()
+            # Populate cached_books
+            for this_book in booklist:
+                # Manage collections may change this_book.device_collections,
+                # so we need to make a copy of it for testing during rebuild_collections
+                cached_books[this_book.path] = {
+                    'author': this_book.author,
+                    'authors': this_book.authors,
+                    'author_sort': this_book.author_sort,
+                    'cover_hash': this_book.cover_hash,
+                    'description': this_book.description,
+                    'device_collections': copy.copy(this_book.device_collections),
+                    'pubdate': this_book.pubdate,
+                    'publisher': this_book.publisher,
+                    'series': this_book.series,
+                    'series_index': this_book.series_index,
+                    'size': this_book.size,
+                    'tags': this_book.tags,
+                    'title': this_book.title,
+                    'title_sort': this_book.title_sort,
+                    'uuid': this_book.uuid,
+                    }
 
             if self.report_progress is not None:
                 self.report_progress(1.0, 'finished')
@@ -1415,6 +1430,29 @@ if True:
         return (new_booklist, [], [])
 
     # helpers
+    def _compare_mainDb_profiles(self, stored_mainDb_profile):
+        '''
+        '''
+        self._log_location()
+        current_mainDb_profile = self._profile_db()
+        matched = True
+        for key in sorted(current_mainDb_profile.keys()):
+            if current_mainDb_profile[key] != stored_mainDb_profile[key]:
+                matched = False
+                self._log("mainDb_profile does not match")
+                break
+
+        # Display mainDb_profile mismatch
+        if not matched:
+            self._log("current_mainDb_profile does not match stored_mainDb_profile:")
+            self._log("{0:20} {1:^32} {2:^32}".format('key', 'stored', 'current'))
+            self._log("{0:—^20} {1:—^32} {2:—^32}".format('', '', ''))
+            for key in sorted(current_mainDb_profile.keys()):
+                self._log("{0:20} {1:<32} {2:<32}".format(
+                    key, stored_mainDb_profile[key], current_mainDb_profile[key]))
+
+        return matched
+
     def _cover_subpath(self, size="small"):
         '''
         Return subpath to covers in Marvin sandbox based on Marvin version.
@@ -1565,6 +1603,23 @@ if True:
                 self._log(traceback.format_exc())
 
         return this_book
+
+    def _dehydrate_booklist(self, booklist):
+        '''
+        Convert the BookList object to storable JSON
+        booklist: BookList() object
+        dehydrated: [{book}, {book}…]
+        '''
+        self._log_location()
+        all_iosra_keys = sorted(Book.iosra_standard_keys + Book.iosra_custom_keys)
+        dehydrated = []
+
+        for book in booklist:
+            this_book = {}
+            for key in all_iosra_keys:
+                this_book[key] = getattr(book, key, None)
+            dehydrated.append(this_book)
+        return dehydrated
 
     def _evaluate_original_cover(self, mi):
         '''
@@ -1792,6 +1847,60 @@ if True:
                              resolve_entities=True)[0].strip()
         return etree.fromstring(data, parser=RECOVER_PARSER)
 
+    def _profile_db(self):
+        '''
+        Snapshot key aspects of mainDb
+        '''
+
+        profile = {}
+        con = sqlite3.connect(self.local_db_path)
+        with con:
+            con.row_factory = sqlite3.Row
+            cur = con.cursor()
+
+            # Hash the titles and authors
+            m = hashlib.md5()
+            cur.execute('''SELECT Title, Author FROM Books''')
+            rows = cur.fetchall()
+            for row in rows:
+                m.update(row[b'Title'])
+                m.update(row[b'Author'])
+            profile['content_hash'] = m.hexdigest()
+
+            # Evaluate the cover cache
+            covers = self.ios.listdir(self._cover_subpath(size="small"))
+            profile['cover_count'] = len(covers)
+            m = hashlib.md5()
+            for path in covers.keys():
+                m.update(path)
+            profile['covers_hash'] = m.hexdigest()
+
+            # Get the table sizes
+            for table in ['BookCollections', 'Collections']:
+                cur.execute('''SELECT * FROM '{0}' '''.format(table))
+                profile[table] = len(cur.fetchall())
+
+        return profile
+
+    def _rehydrate_booklist(self, stored):
+        '''
+        Convert stored JSON to BookList()
+        '''
+        self._log_location()
+        all_iosra_keys = sorted(Book.iosra_standard_keys + Book.iosra_custom_keys)
+
+        # title and authors are populated when Book() instantiated
+        for key in ['title', 'authors']:
+            all_iosra_keys.remove(key)
+
+        rehydrated = BookList(self)
+        for stored_book in stored:
+            this_book = Book(stored_book['title'], ', '.join(stored_book['authors']))
+            for prop in all_iosra_keys:
+                setattr(this_book, prop, stored_book.get(prop))
+            rehydrated.add_book(this_book, False)
+        return rehydrated
+
     def _remove_existing_copy(self, path, metadata):
         '''
         '''
@@ -1958,6 +2067,35 @@ if True:
         self.ios_connection['device_name'] = device_name
         self.ios_connection['udid'] = udid
 
+    def _restore_from_snapshot(self):
+        '''
+        Try to restore from last session
+        '''
+        self._log_location()
+        archive_contents = []
+        booklist = BookList(self)
+        archive_path = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
+        if self.ios.exists(archive_path):
+            # Copy the stored booklist to a local temp file
+            with TemporaryFile() as local:
+                with open(local, 'w') as f:
+                    self.ios.copy_from_idevice(archive_path, f)
+
+                archive = ZipFile(local, 'r')
+                archive_list = [f.filename for f in archive.infolist()]
+                if (not 'mainDb_profile.json' in archive_list or
+                    not 'booklist.json' in archive_list):
+                    self._log("damaged archive")
+                else:
+                    stored_mainDb_profile = json.loads(archive.read('mainDb_profile.json'))
+                    if self._compare_mainDb_profiles(stored_mainDb_profile):
+                        self._log("mainDb profiles match, restoring from archived booklist")
+                        booklist = self._rehydrate_booklist(
+                            json.loads(archive.read('booklist.json'), object_hook=from_json))
+        else:
+            self._log("no stored archive")
+        return booklist
+
     def _schedule_metadata_update(self, target_epub, book, update_soup):
         '''
         Generate metadata update content for individual book
@@ -2085,6 +2223,43 @@ if True:
 
         update_soup.manifest.insert(0, book_tag)
 
+    def _snapshot_booklist(self, booklist, profile):
+        '''
+        Store a snapshot of the connected Marvin library, dehydrated booklist
+        Enables optimized reload after disconnect
+        booklist: BookList() object
+        profile: snapshot of mainDb
+        '''
+        self._log_location()
+
+        dehydrated = self._dehydrate_booklist(booklist)
+        if self._validate_dehydrated_booklist(booklist, dehydrated):
+#             booklist_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'iosra_booklist.json')
+#             with open(booklist_path, 'w') as out:
+#                 out.write(json.dumps(dehydrated, default=to_json, indent=2, sort_keys=True))
+#             profile_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'iosra_db_profile.json')
+#             with open(profile_path, 'w') as out:
+#                 out.write(json.dumps(profile, default=to_json, indent=2, sort_keys=True))
+
+            # Confirm path to cache folder exists
+            folder_exists = self.ios.exists(self.REMOTE_CACHE_FOLDER)
+            if not folder_exists:
+                self._log("creating remote_cache_folder at {0}".format(self.REMOTE_CACHE_FOLDER))
+                self.ios.mkdir(self.REMOTE_CACHE_FOLDER)
+
+            # Build the zip archive
+#             archive_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'booklist.zip')
+#             with ZipFile(archive_path, 'w', compression=ZIP_STORED) as zfw:
+            with TemporaryFile() as zipf:
+                with ZipFile(zipf, 'w') as zfw:
+                    zfw.writestr("mainDb_profile.json", json.dumps(profile, default=to_json, indent=2, sort_keys=True))
+                    zfw.writestr("booklist.json", json.dumps(dehydrated, default=to_json, indent=2, sort_keys=True))
+
+                # Copy the archive to the remote cache folder
+                self.ios.copy_to_idevice(str(zipf),
+                    '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip']))
+
+
     def _stage_command_file(self, command_name, command_soup, show_command=False):
         fl = locale.format("%d", len(command_soup.renderContents()), grouping=True)
         self._log_location("%s: %s bytes" % (command_name, fl))
@@ -2187,6 +2362,31 @@ if True:
             set_metadata(zfo, metadata_x, apply_null=True, update_timestamp=True)
 
         return metadata_x
+
+    def _validate_dehydrated_booklist(self, booklist, dehydrated):
+        '''
+        Sanity test to confirm stored version of booklist is legit
+        '''
+        self._log_location()
+        rehydrated = self._rehydrate_booklist(dehydrated)
+        ans = None
+        if rehydrated == booklist:
+            ans = True
+            self._log("rehydrated matches booklist")
+        else:
+            ans = False
+            self._log("rehydrated != booklist")
+            self._log("{0:20} {1:20} {2:20}".format('prop', 'booklist', 'rehydrated'))
+            self._log("{0:-^20} {1:-^20} {2:-^20}".format('', '', ''))
+            all_iosra_keys = sorted(Book.iosra_standard_keys + Book.iosra_custom_keys)
+            for x in range(len(booklist)):
+                for prop in all_iosra_keys:
+                    if booklist[x].get(prop) != rehydrated[x].get(prop):
+                        self._log("{0:<20} {1:20} {2:20}".format(prop,
+                            repr(booklist[x].get(prop)),
+                            repr(rehydrated[x].get(prop)),
+                            ))
+        return ans
 
     def _wait_for_command_completion(self, command_name, send_signal=True):
         '''
