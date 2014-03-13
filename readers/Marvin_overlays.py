@@ -257,10 +257,12 @@ if True:
             self._localize_database_path(self.books_subpath)
             cached_books = {}
 
-            booklist = self._restore_from_snapshot()
+            if self.prefs.get('booklist_caching', True):
+                booklist = self._restore_from_snapshot()
+
             if not booklist:
                 # booklist is an empty BookList() object returned from _restore_from_snapshot()
-                self._log("generating new booklist from connected device")
+                self._log("generating booklist from connected device")
 
                 con = sqlite3.connect(self.local_db_path)
                 with con:
@@ -367,12 +369,11 @@ if True:
                         if self.report_progress is not None:
                             self.report_progress(float((i + 1)*100 / book_count)/100,
                                 '%(num)d of %(tot)d' % dict(num=i + 1, tot=book_count))
-
-
                     cur.close()
 
                     # Snapshot booklist for optimized reload
-                    self._snapshot_booklist(booklist, self._profile_db())
+                    if self.prefs.get('booklist_caching', True):
+                        self._snapshot_booklist(booklist, self._profile_db())
 
             # Populate cached_books
             for this_book in booklist:
@@ -1437,9 +1438,11 @@ if True:
         current_mainDb_profile = self._profile_db()
         matched = True
         for key in sorted(current_mainDb_profile.keys()):
-            if current_mainDb_profile[key] != stored_mainDb_profile[key]:
+            if (key in stored_mainDb_profile and
+                current_mainDb_profile[key] == stored_mainDb_profile[key]):
+                continue
+            else:
                 matched = False
-                self._log("mainDb_profile does not match")
                 break
 
         # Display mainDb_profile mismatch
@@ -1448,8 +1451,9 @@ if True:
             self._log("{0:20} {1:^32} {2:^32}".format('key', 'stored', 'current'))
             self._log("{0:—^20} {1:—^32} {2:—^32}".format('', '', ''))
             for key in sorted(current_mainDb_profile.keys()):
-                self._log("{0:20} {1:<32} {2:<32}".format(
-                    key, stored_mainDb_profile[key], current_mainDb_profile[key]))
+                self._log("{0:20} {1:<32} {2:<32}".format(key,
+                    stored_mainDb_profile.get(key, None),
+                    current_mainDb_profile.get(key, None)))
 
         return matched
 
@@ -1868,7 +1872,9 @@ if True:
             profile['content_hash'] = m.hexdigest()
 
             # Evaluate the cover cache
-            covers = self.ios.listdir(self._cover_subpath(size="small"))
+            # Causes buffer overflow in libiMobileDevice with large libraries,
+            # but enables optimized restoration
+            covers = self.ios.listdir(self._cover_subpath(size="small"), get_stats=False)
             profile['cover_count'] = len(covers)
             m = hashlib.md5()
             for path in covers.keys():
@@ -1876,7 +1882,7 @@ if True:
             profile['covers_hash'] = m.hexdigest()
 
             # Get the table sizes
-            for table in ['BookCollections', 'Collections']:
+            for table in ['Books', 'BookCollections', 'Collections']:
                 cur.execute('''SELECT * FROM '{0}' '''.format(table))
                 profile[table] = len(cur.fetchall())
 
@@ -2076,10 +2082,16 @@ if True:
         booklist = BookList(self)
         archive_path = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
         if self.ios.exists(archive_path):
+            if self.report_progress is not None:
+                self.report_progress(0.01, 'Analyzing cached booklist')
+
             # Copy the stored booklist to a local temp file
             with TemporaryFile() as local:
                 with open(local, 'w') as f:
                     self.ios.copy_from_idevice(archive_path, f)
+
+                if self.report_progress is not None:
+                    self.report_progress(0.25, 'Analyzing cached booklist')
 
                 archive = ZipFile(local, 'r')
                 archive_list = [f.filename for f in archive.infolist()]
@@ -2090,10 +2102,10 @@ if True:
                     stored_mainDb_profile = json.loads(archive.read('mainDb_profile.json'))
                     if self._compare_mainDb_profiles(stored_mainDb_profile):
                         self._log("mainDb profiles match, restoring from archived booklist")
+                        if self.report_progress is not None:
+                            self.report_progress(0.5, 'Restoring cached booklist')
                         booklist = self._rehydrate_booklist(
                             json.loads(archive.read('booklist.json'), object_hook=from_json))
-        else:
-            self._log("no stored archive")
         return booklist
 
     def _schedule_metadata_update(self, target_epub, book, update_soup):
@@ -2233,14 +2245,9 @@ if True:
         self._log_location()
 
         dehydrated = self._dehydrate_booklist(booklist)
-        if self._validate_dehydrated_booklist(booklist, dehydrated):
-#             booklist_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'iosra_booklist.json')
-#             with open(booklist_path, 'w') as out:
-#                 out.write(json.dumps(dehydrated, default=to_json, indent=2, sort_keys=True))
-#             profile_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'iosra_db_profile.json')
-#             with open(profile_path, 'w') as out:
-#                 out.write(json.dumps(profile, default=to_json, indent=2, sort_keys=True))
-
+        #if self._validate_dehydrated_booklist(booklist, dehydrated):
+        if True:
+            self._log("generating booklist.zip")
             # Confirm path to cache folder exists
             folder_exists = self.ios.exists(self.REMOTE_CACHE_FOLDER)
             if not folder_exists:
@@ -2248,8 +2255,6 @@ if True:
                 self.ios.mkdir(self.REMOTE_CACHE_FOLDER)
 
             # Build the zip archive
-#             archive_path = os.path.join(os.path.expanduser('~'), 'Desktop', 'booklist.zip')
-#             with ZipFile(archive_path, 'w', compression=ZIP_STORED) as zfw:
             with TemporaryFile() as zipf:
                 with ZipFile(zipf, 'w') as zfw:
                     zfw.writestr("mainDb_profile.json", json.dumps(profile, default=to_json, indent=2, sort_keys=True))
@@ -2258,7 +2263,7 @@ if True:
                 # Copy the archive to the remote cache folder
                 self.ios.copy_to_idevice(str(zipf),
                     '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip']))
-
+            self._log("booklist.zip stored to {0}".format(self.REMOTE_CACHE_FOLDER))
 
     def _stage_command_file(self, command_name, command_soup, show_command=False):
         fl = locale.format("%d", len(command_soup.renderContents()), grouping=True)
