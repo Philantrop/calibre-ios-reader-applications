@@ -1437,24 +1437,22 @@ if True:
         self._log_location()
         current_mainDb_profile = self._profile_db()
         matched = True
+
         for key in sorted(current_mainDb_profile.keys()):
-            if (key in stored_mainDb_profile and
-                current_mainDb_profile[key] == stored_mainDb_profile[key]):
-                continue
-            else:
+            if current_mainDb_profile[key] != stored_mainDb_profile[key]:
                 matched = False
                 break
 
         # Display mainDb_profile mismatch
         if not matched:
-            self._log("current_mainDb_profile does not match stored_mainDb_profile:")
-            self._log("{0:20} {1:^32} {2:^32}".format('key', 'stored', 'current'))
-            self._log("{0:—^20} {1:—^32} {2:—^32}".format('', '', ''))
+            self._log("   {0:20} {1:37} {2:37}".format('key', 'stored', 'current'))
+            self._log("{0:—^23} {1:—^37} {2:—^37}".format('', '', ''))
             for key in sorted(current_mainDb_profile.keys()):
-                self._log("{0:20} {1:<32} {2:<32}".format(key,
-                    stored_mainDb_profile.get(key, None),
-                    current_mainDb_profile.get(key, None)))
-
+                self._log("{0}  {1:20} {2:<37} {3:<37}".format(
+                    'x' if stored_mainDb_profile[key] != current_mainDb_profile[key] else ' ',
+                    key,
+                    repr(stored_mainDb_profile[key]),
+                    repr(current_mainDb_profile[key])))
         return matched
 
     def _cover_subpath(self, size="small"):
@@ -2087,25 +2085,31 @@ if True:
 
             # Copy the stored booklist to a local temp file
             with TemporaryFile() as local:
-                with open(local, 'w') as f:
+                with open(local, 'wb') as f:
                     self.ios.copy_from_idevice(archive_path, f)
 
                 if self.report_progress is not None:
                     self.report_progress(0.25, 'Analyzing cached booklist')
 
                 archive = ZipFile(local, 'r')
-                archive_list = [f.filename for f in archive.infolist()]
-                if (not 'mainDb_profile.json' in archive_list or
-                    not 'booklist.json' in archive_list):
-                    self._log("damaged archive")
-                else:
-                    stored_mainDb_profile = json.loads(archive.read('mainDb_profile.json'))
-                    if self._compare_mainDb_profiles(stored_mainDb_profile):
-                        self._log("mainDb profiles match, restoring from archived booklist")
-                        if self.report_progress is not None:
-                            self.report_progress(0.5, 'Restoring cached booklist')
-                        booklist = self._rehydrate_booklist(
-                            json.loads(archive.read('booklist.json'), object_hook=from_json))
+                try:
+                    archive_list = [f.filename for f in archive.infolist()]
+                    if (not 'mainDb_profile.json' in archive_list or
+                        not 'booklist.json' in archive_list):
+                        self._log("damaged archive")
+                    else:
+                        stored_mainDb_profile = json.loads(archive.read('mainDb_profile.json'))
+                        if self._compare_mainDb_profiles(stored_mainDb_profile):
+                            self._log("mainDb profiles match, restoring from archived booklist")
+                            if self.report_progress is not None:
+                                self.report_progress(0.5, 'Restoring cached booklist')
+                            booklist = self._rehydrate_booklist(
+                                json.loads(archive.read('booklist.json'), object_hook=from_json))
+                except:
+                    import traceback
+                    self._log("*** error reading from cached booklist ***")
+                    self._log(traceback.format_exc())
+                    booklist = BookList(self)
         return booklist
 
     def _schedule_metadata_update(self, target_epub, book, update_soup):
