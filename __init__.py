@@ -69,6 +69,86 @@ READER_APP_ALIASES = {
 KINDLE_ENABLED_FORMATS = ['MOBI']
 KINDLE_SUPPORTED_FORMATS = ['MOBI']
 
+class Logger():
+    '''
+    A self-modifying class to log debug statements.
+    If disabled in prefs, methods are neutered at first call for performance optimization
+    '''
+    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
+
+    def _log(self, msg=None):
+        '''
+        Upon first call, switch to appropriate method
+        '''
+        if not plugin_prefs.get('debug_plugin', False):
+            # Neuter the method
+            self._log = self.__null
+            self._log_location = self.__null
+        else:
+            # Log the message, then switch to real method
+            if msg:
+                debug_print(" {0}".format(str(msg)))
+            else:
+                debug_print()
+
+            self._log = self.__log
+            self._log_location = self.__log_location
+
+    def __log(self, msg=None):
+        '''
+        The real method
+        '''
+        if msg:
+            debug_print(" {0}".format(str(msg)))
+        else:
+            debug_print()
+
+    def _log_location(self, *args):
+        '''
+        Upon first call, switch to appropriate method
+        '''
+        if not plugin_prefs.get('debug_plugin', False):
+            # Neuter the method
+            self._log = self.__null
+            self._log_location = self.__null
+        else:
+            # Log the message from here so stack trace is valid
+            arg1 = arg2 = ''
+
+            if len(args) > 0:
+                arg1 = str(args[0])
+            if len(args) > 1:
+                arg2 = str(args[1])
+
+            debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
+                        func=sys._getframe(1).f_code.co_name,
+                        arg1=arg1, arg2=arg2))
+
+            # Switch to real method
+            self._log = self.__log
+            self._log_location = self.__log_location
+
+    def __log_location(self, *args):
+        '''
+        The real method
+        '''
+        arg1 = arg2 = ''
+
+        if len(args) > 0:
+            arg1 = str(args[0])
+        if len(args) > 1:
+            arg2 = str(args[1])
+
+        debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
+                    func=sys._getframe(1).f_code.co_name,
+                    arg1=arg1, arg2=arg2))
+
+    def __null(self, *args, **kwargs):
+        '''
+        Optimized method when logger is silent
+        '''
+        pass
+
 
 class Book(Metadata):
     '''
@@ -109,7 +189,7 @@ class Book(Metadata):
         return title_sort(self.title)
 
 
-class BookList(CollectionsBookList):
+class BookList(CollectionsBookList, Logger):
     '''
     A list of books.
     Each Book object must have the fields:
@@ -123,9 +203,6 @@ class BookList(CollectionsBookList):
          absolute (platform native) path to the image
       7. tags (a list of strings, can be empty).
     '''
-    # Location reporting template
-    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
-
     __getslice__ = None
     __setslice__ = None
 
@@ -269,6 +346,7 @@ class BookList(CollectionsBookList):
             else:
                 self._log("no collection changes detected cached_books <=> device books")
 
+    """
     def _log(self, msg=None):
         '''
         Print msg to console
@@ -298,6 +376,7 @@ class BookList(CollectionsBookList):
         debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
             func=sys._getframe(1).f_code.co_name,
             arg1=arg1, arg2=arg2))
+    """
 
 
 class CompileUI():
@@ -410,7 +489,7 @@ class InvalidEpub(ValueError):
     pass
 
 
-class iOSReaderApp(DriverBase):
+class iOSReaderApp(DriverBase, Logger):
     '''
 
     '''
@@ -479,9 +558,6 @@ class iOSReaderApp(DriverBase):
     temp_dir = None
     verbose = None
     version = (1, 3, 5)
-
-    # Location reporting template
-    LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
 
     # Init the BCD and USB fingerprints sets
     _PRODUCT_ID = set([])
@@ -1197,6 +1273,7 @@ class iOSReaderApp(DriverBase):
 
         return {'path': local_db_path, 'stats': db_stats}
 
+    """
     def _log(self, msg=None):
         '''
         Print msg to console
@@ -1226,6 +1303,7 @@ class iOSReaderApp(DriverBase):
         debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
             func=sys._getframe(1).f_code.co_name,
             arg1=arg1, arg2=arg2))
+    """
 
 
 class ReaderAppSignals(QObject):
