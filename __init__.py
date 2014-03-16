@@ -551,7 +551,8 @@ class iOSReaderApp(DriverBase, Logger):
     format_map = []
     gui_name = 'iOS reader applications'
     icon = None
-    minimum_calibre_version = (1, 0, 0)
+    # #mark minimum_calibre_version
+    minimum_calibre_version = (1, 28, 0)
     name = 'iOS reader applications'
     overlays_loaded = False
     supported_platforms = ['linux', 'osx', 'windows']
@@ -559,6 +560,7 @@ class iOSReaderApp(DriverBase, Logger):
     verbose = None
     version = (1, 3, 5)
 
+    # #mark USB fingerprints
     # Init the BCD and USB fingerprints sets
     _PRODUCT_ID = set([])
     _BCD = set([0x01])
@@ -734,7 +736,10 @@ class iOSReaderApp(DriverBase, Logger):
 
         if True and self.verbose:
             for item in sorted(self.device_profile):
-                self._log(" {0:21}: {1}".format(item, self.device_profile[item]))
+                if item in ['FSTotalBytes', 'FSFreeBytes']:
+                    self._log(" {0:21}: {1:,}".format(item, int(self.device_profile[item])))
+                else:
+                    self._log(" {0:21}: {1}".format(item, self.device_profile[item]))
 
         device_information = (self.device_profile['DeviceName'],
                               self.device_profile['ProductType'],
