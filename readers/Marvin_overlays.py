@@ -2091,8 +2091,8 @@ if True:
                 if self.report_progress is not None:
                     self.report_progress(0.25, 'Analyzing cached booklist')
 
-                archive = ZipFile(local, 'r')
                 try:
+                    archive = ZipFile(local, 'r')
                     archive_list = [f.filename for f in archive.infolist()]
                     if (not 'mainDb_profile.json' in archive_list or
                         not 'booklist.json' in archive_list):
