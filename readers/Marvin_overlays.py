@@ -194,15 +194,17 @@ if True:
         '''
         from calibre import strftime
 
-        def _get_marvin_cover(book_hash):
+        def _get_marvin_cover(book_hash, title):
             '''
             Given book_hash, retrieve the associated small jpg cover
             '''
             cover_path = '/'.join([self._cover_subpath(size="small"), '%s.jpg' % book_hash])
             cover_bytes = None
-            stats = self.ios.exists(cover_path)
+            stats = self.ios.exists(cover_path, silent=True)
             if stats:
                 cover_bytes = self.ios.read(cover_path, mode='rb')
+            else:
+                self._log_location("no cover available for '{0}'".format(title))
             return cover_bytes
 
         def _get_marvin_genres(cur, book_id):
@@ -359,7 +361,7 @@ if True:
                             continue
 
                         this_book.size = int(_file_size['st_size'])
-                        this_book.thumbnail = _get_marvin_cover(row[b'Hash'])
+                        this_book.thumbnail = _get_marvin_cover(row[b'Hash'], row[b'Title'])
                         this_book.tags = _get_marvin_genres(cur, book_id)
                         this_book.title_sort = row[b'CalibreTitleSort']
                         this_book.uuid = row[b'UUID']
@@ -542,7 +544,7 @@ if True:
                 self._log("3. Looking for calibre connection mode")
 
             connection_live = False
-            if self.ios.exists(self.connected_fs):
+            if self.ios.exists(self.connected_fs, silent=True):
                 # Parse the connection data for state
                 connection = etree.fromstring(self.ios.read(self.connected_fs))
                 connection_state = connection.find('state').text
@@ -680,7 +682,6 @@ if True:
         if iswindows:
             return self.is_usb_connected_windows(devices_on_system,
                     debug=debug, only_presence=only_presence)
-
 
         # >>> Entry point
         #self._log_location(self.ios_connection)
@@ -2079,7 +2080,7 @@ if True:
         archive_contents = []
         booklist = BookList(self)
         archive_path = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
-        if self.ios.exists(archive_path):
+        if self.ios.exists(archive_path, silent=True):
             if self.report_progress is not None:
                 self.report_progress(0.01, 'Analyzing cached booklist')
 
