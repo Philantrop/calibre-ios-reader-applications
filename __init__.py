@@ -552,13 +552,13 @@ class iOSReaderApp(DriverBase, Logger):
     gui_name = 'iOS reader applications'
     icon = None
     # #mark minimum_calibre_version
-    minimum_calibre_version = (1, 28, 0)
+    minimum_calibre_version = (1, 29, 0)
     name = 'iOS reader applications'
     overlays_loaded = False
     supported_platforms = ['linux', 'osx', 'windows']
     temp_dir = None
     verbose = None
-    version = (1, 3, 5)
+    version = (1, 3, 6)
 
     # #mark USB fingerprints
     # Init the BCD and USB fingerprints sets
@@ -1121,12 +1121,14 @@ class iOSReaderApp(DriverBase, Logger):
         self._log_location()
         device_list = self.ios.get_device_list()
         if device_list is None:
-            raise libiMobileDeviceException("Unable to communicate with libiMobileDevice")
+            raise libiMobileDeviceException("No connected iDevices")
         app_id = None
         try:
             if len(device_list):
                 if len(device_list) == 1:
                     self.ios.connect_idevice()
+                    if not self.ios.device_connected:
+                        raise libiMobileDeviceException("Unable to connect iDevice")
                     #self.ios.get_installed_apps(READER_APP_ALIASES[self.ios_reader_app])
                     preferences = self.ios.get_preferences()
                     self.ios.disconnect_idevice()
@@ -1155,9 +1157,9 @@ class iOSReaderApp(DriverBase, Logger):
                 self._log("No connected iDevices")
         except:
             import traceback
-            traceback.print_exc()
+            #traceback.print_exc()
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self._log(traceback.format_exception_only(exc_type, exc_value)[0].strip())
+            self._log_location(traceback.format_exception_only(exc_type, exc_value)[0].strip())
         return app_id
 
     def _init_prefs(self):
