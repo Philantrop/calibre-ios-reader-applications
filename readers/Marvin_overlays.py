@@ -940,16 +940,20 @@ if True:
         '''
         self._log_location()
         if self.prefs.get('booklist_caching', True):
-            self._snapshot_booklist(booklists[0], self._profile_db())
+            # Recast thumbnails to bytearray for JSON
+            booklist = list(booklists[0])
+            for book in booklist:
+                if (book.thumbnail is not None and
+                    not isinstance(book.thumbnail, bytearray)):
+                    book.thumbnail = bytearray(book.thumbnail)
+            self._snapshot_booklist(booklist, self._profile_db())
 
         # Automatic metadata management is disabled 2013-06-03 v0.1.11
-        if True:
-            self._log("automatic metadata management disabled")
-            return
+        #self._log("automatic metadata management disabled")
+        return
 
-
-        # Dead code
-
+        """
+        # Automatic metadata management
         from xml.sax.saxutils import escape
         from calibre import strftime
 
@@ -1188,6 +1192,7 @@ if True:
                 self._wait_for_command_completion(command_name)
             else:
                 self._log("no metadata changes detected")
+        """
 
     def upload_books(self, files, names, on_card=None, end_session=True, metadata=None):
         '''
@@ -1641,6 +1646,7 @@ if True:
             for key in all_iosra_keys:
                 this_book[key] = getattr(book, key, None)
             dehydrated.append(this_book)
+
         return dehydrated
 
     def _evaluate_original_cover(self, mi):
@@ -2317,7 +2323,7 @@ if True:
                 self._log(command_soup.prettify())
 
         # Make sure there is no orphan status.xml
-        if self.ios.exists(self.status_fs):
+        if self.ios.exists(self.status_fs, silent=True):
             self.ios.remove(self.status_fs)
 
         tmp = b'/'.join([self.staging_folder, b'%s.tmp' % command_name])
@@ -2441,7 +2447,7 @@ if True:
         watchdog.start()
 
         while True:
-            if not self.ios.exists(self.status_fs):
+            if not self.ios.exists(self.status_fs, silent=True):
                 # status.xml not created yet
                 if self.operation_timed_out:
                     self.ios.remove(self.status_fs)
