@@ -942,7 +942,7 @@ class iOSReaderApp(DriverBase, Logger):
         self._log_location()
         self.vid = connected_device[0]
         self.pid = connected_device[1]
-        self._log(" vid:%04x pid:%04x" % (self.vid, self.pid))
+        self._log(" Vendor ID (vid):%04x Product ID: (pid):%04x" % (self.vid, self.pid))
 
     def reset(self, **kwargs):
         '''
@@ -955,8 +955,11 @@ class iOSReaderApp(DriverBase, Logger):
         :detected_device: Device information from the device scanner
         '''
         self._log_location()
-        for key, value in kwargs.iteritems():
-            self._log("%s = %s" % (key, value))
+        if False:
+            for key, value in kwargs.iteritems():
+                self._log("%s = %s" % (key, value))
+        else:
+            pass
 
     def set_option(self):
         self._log_location()

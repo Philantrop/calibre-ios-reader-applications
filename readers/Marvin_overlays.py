@@ -4,7 +4,7 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
-import base64, copy, cStringIO, hashlib, json, locale, os, posixpath, re, sqlite3, time
+import atexit, base64, copy, cStringIO, hashlib, json, locale, os, posixpath, re, sqlite3, time
 from datetime import datetime
 from lxml import etree, html
 
@@ -129,6 +129,9 @@ if True:
 
         # ~~~~~~~~~ Create a device signal class for Marvin Manager ~~~~~~~~~
         self.marvin_device_signals = ReaderAppSignals()
+
+        # Hook exit
+        atexit.register(self.shutdown)
 
     def add_books_to_metadata(self, locations, metadata, booklists):
         '''
@@ -264,7 +267,7 @@ if True:
 
             if not booklist:
                 # booklist is an empty BookList() object returned from _restore_from_snapshot()
-                self._log("generating booklist from connected device")
+                self._log_location("generating booklist from connected device")
 
                 con = sqlite3.connect(self.local_db_path)
                 with con:
@@ -913,6 +916,15 @@ if True:
         '''
         self.__busy = value
 
+    def shutdown(self):
+        '''
+        Cache the booklist
+        Wait for any active communication to complete
+        '''
+        self._log_location()
+        self.eject()
+        self.ios.disconnect_idevice()
+
     def sync_booklists(self, booklists, end_session=True):
         '''
         Update metadata on device.
@@ -926,10 +938,17 @@ if True:
         manage_device_metadata=='on_connect', otherwise booklist metadata comes from
         device
         '''
+        self._log_location()
+        if self.prefs.get('booklist_caching', True):
+            self._snapshot_booklist(booklists[0], self._profile_db())
+
         # Automatic metadata management is disabled 2013-06-03 v0.1.11
         if True:
-            self._log_location("automatic metadata management disabled")
+            self._log("automatic metadata management disabled")
             return
+
+
+        # Dead code
 
         from xml.sax.saxutils import escape
         from calibre import strftime
@@ -1435,7 +1454,6 @@ if True:
     def _compare_mainDb_profiles(self, stored_mainDb_profile):
         '''
         '''
-        self._log_location()
         current_mainDb_profile = self._profile_db()
         matched = True
 
@@ -1446,6 +1464,7 @@ if True:
 
         # Display mainDb_profile mismatch
         if not matched:
+            self._log_location()
             self._log("   {0:20} {1:37} {2:37}".format('key', 'stored', 'current'))
             self._log("{0:—^23} {1:—^37} {2:—^37}".format('', '', ''))
             for key in sorted(current_mainDb_profile.keys()):
@@ -2074,11 +2093,12 @@ if True:
 
     def _restore_from_snapshot(self):
         '''
-        Try to restore from last session
+        Try to restore booklist.zip from last session
         '''
         self._log_location()
-        archive_contents = []
         booklist = BookList(self)
+        restored = False
+
         archive_path = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
         if self.ios.exists(archive_path, silent=True):
             if self.report_progress is not None:
@@ -2101,16 +2121,19 @@ if True:
                     else:
                         stored_mainDb_profile = json.loads(archive.read('mainDb_profile.json'))
                         if self._compare_mainDb_profiles(stored_mainDb_profile):
-                            self._log("mainDb profiles match, restoring from archived booklist")
+                            self._log("restoring cached booklist")
                             if self.report_progress is not None:
                                 self.report_progress(0.5, 'Restoring cached booklist')
                             booklist = self._rehydrate_booklist(
                                 json.loads(archive.read('booklist.json'), object_hook=from_json))
+                            restored = True
                 except:
                     import traceback
                     self._log("*** error reading from cached booklist ***")
                     self._log(traceback.format_exc())
                     booklist = BookList(self)
+        if not restored:
+            self._log("unable to restore booklist from cache")
         return booklist
 
     def _schedule_metadata_update(self, target_epub, book, update_soup):
@@ -2250,25 +2273,23 @@ if True:
         self._log_location()
 
         dehydrated = self._dehydrate_booklist(booklist)
-        #if self._validate_dehydrated_booklist(booklist, dehydrated):
-        if True:
-            self._log("generating booklist.zip")
-            # Confirm path to cache folder exists
-            folder_exists = self.ios.exists(self.REMOTE_CACHE_FOLDER)
-            if not folder_exists:
-                self._log("creating remote_cache_folder at {0}".format(self.REMOTE_CACHE_FOLDER))
-                self.ios.mkdir(self.REMOTE_CACHE_FOLDER)
+        self._log("generating booklist.zip")
+        # Confirm path to cache folder exists
+        folder_exists = self.ios.exists(self.REMOTE_CACHE_FOLDER)
+        if not folder_exists:
+            self._log("creating remote_cache_folder at {0}".format(self.REMOTE_CACHE_FOLDER))
+            self.ios.mkdir(self.REMOTE_CACHE_FOLDER)
 
-            # Build the zip archive
-            with TemporaryFile() as zipf:
-                with ZipFile(zipf, 'w') as zfw:
-                    zfw.writestr("mainDb_profile.json", json.dumps(profile, default=to_json, indent=2, sort_keys=True))
-                    zfw.writestr("booklist.json", json.dumps(dehydrated, default=to_json, indent=2, sort_keys=True))
+        # Build the zip archive
+        with TemporaryFile() as zipf:
+            with ZipFile(zipf, 'w') as zfw:
+                zfw.writestr("mainDb_profile.json", json.dumps(profile, default=to_json, indent=2, sort_keys=True))
+                zfw.writestr("booklist.json", json.dumps(dehydrated, default=to_json, indent=2, sort_keys=True))
 
-                # Copy the archive to the remote cache folder
-                self.ios.copy_to_idevice(str(zipf),
-                    '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip']))
-            self._log("booklist.zip stored to {0}".format(self.REMOTE_CACHE_FOLDER))
+            # Copy the archive to the remote cache folder
+            self.ios.copy_to_idevice(str(zipf),
+                '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip']))
+        self._log("booklist.zip stored to {0}".format(self.REMOTE_CACHE_FOLDER))
 
     def _stage_command_file(self, command_name, command_soup, show_command=False):
         fl = locale.format("%d", len(command_soup.renderContents()), grouping=True)
