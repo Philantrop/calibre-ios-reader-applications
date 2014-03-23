@@ -1129,10 +1129,9 @@ class iOSReaderApp(DriverBase, Logger):
         try:
             if len(device_list):
                 if len(device_list) == 1:
-                    self.ios.connect_idevice()
-                    if not self.ios.device_connected:
-                        raise libiMobileDeviceException("Unable to connect iDevice")
-                    #self.ios.get_installed_apps(READER_APP_ALIASES[self.ios_reader_app])
+                    connected = self.ios.connect_idevice()
+                    if not connected:
+                        raise libiMobileDeviceException("Unable to connect to iDevice")
                     preferences = self.ios.get_preferences()
                     self.ios.disconnect_idevice()
 
@@ -1162,7 +1161,10 @@ class iOSReaderApp(DriverBase, Logger):
             import traceback
             #traceback.print_exc()
             exc_type, exc_value, exc_traceback = sys.exc_info()
-            self._log_location(traceback.format_exception_only(exc_type, exc_value)[0].strip())
+            self._log_location("ERROR: {0}".format(
+                traceback.format_exception_only(exc_type, exc_value)[0].strip()))
+            from calibre.devices.errors import InitialConnectionError
+            raise InitialConnectionError("Unable to connect to iDevice")
         return app_id
 
     def _init_prefs(self):
