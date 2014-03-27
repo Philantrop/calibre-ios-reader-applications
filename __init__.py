@@ -1322,22 +1322,23 @@ class iOSReaderApp(DriverBase, Logger):
     def _log_metrics(self, book_count=-1):
         '''
         '''
-        self._log_location(self.ios_reader_app)
-        br = browser()
-        try:
-            br.open(PluginMetricsLogger.URL)
-            post = PluginMetricsLogger(device_os=self.device_profile['ProductVersion'],
-                             plugin=self.gui_name,
-                             udid=self.device_profile['UniqueDeviceID'],
-                             version="%d.%d.%d" % self.version
-                             )
-            post.req.add_header("DEVICE_MODEL", self.device_profile['ProductType'])
-            post.req.add_header("PLUGIN_PREFERRED_READER_APP", self.ios_reader_app)
-            post.req.add_header("PLUGIN_APP_ID", self.app_id)
-            post.req.add_header("PLUGIN_BOOK_COUNT", book_count)
-            post.start()
-        except Exception as e:
-            self._log("Plugin logger unreachable: {0}".format(e))
+        if self.prefs.get('plugin_diagnostics', True):
+            self._log_location(self.ios_reader_app)
+            br = browser()
+            try:
+                br.open(PluginMetricsLogger.URL)
+                post = PluginMetricsLogger(device_os=self.device_profile['ProductVersion'],
+                                 plugin=self.gui_name,
+                                 udid=self.device_profile['UniqueDeviceID'],
+                                 version="%d.%d.%d" % self.version
+                                 )
+                post.req.add_header("DEVICE_MODEL", self.device_profile['ProductType'])
+                post.req.add_header("PLUGIN_PREFERRED_READER_APP", self.ios_reader_app)
+                post.req.add_header("PLUGIN_APP_ID", self.app_id)
+                post.req.add_header("PLUGIN_BOOK_COUNT", book_count)
+                post.start()
+            except Exception as e:
+                self._log("Plugin logger unreachable: {0}".format(e))
 
 class PluginMetricsLogger(Thread, Logger):
     '''

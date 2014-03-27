@@ -46,6 +46,9 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self.support_label.setOpenExternalLinks(True)
         self.version = parent.version
 
+        # Restore the diagnostic settings
+        self.plugin_diagnostics.setChecked(self.prefs.get('plugin_diagnostics', True))
+
         # Restore the debug settings
         self.debug_plugin.setChecked(self.prefs.get('debug_plugin', False))
         self.debug_libimobiledevice.setChecked(self.prefs.get('debug_libimobiledevice', False))
@@ -106,6 +109,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self._log_location()
 
         # Save general settings
+        self.prefs.set('plugin_diagnostics', self.plugin_diagnostics.isChecked())
         self.prefs.set('debug_plugin', self.debug_plugin.isChecked())
         self.prefs.set('debug_libimobiledevice', self.debug_libimobiledevice.isChecked())
         self.prefs.set('preferred_reader_app', str(self.reader_apps.currentText()))
