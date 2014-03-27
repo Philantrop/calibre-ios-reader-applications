@@ -553,16 +553,16 @@ class iOSReaderApp(DriverBase, Logger):
     format_map = []
     gui_name = 'iOS reader applications'
     icon = None
-    # #mark minimum_calibre_version
-    minimum_calibre_version = (1, 29, 0)
     name = 'iOS reader applications'
     overlays_loaded = False
     supported_platforms = ['linux', 'osx', 'windows']
     temp_dir = None
     verbose = None
+    # #mark ~~~ plugin version, minimum calibre version ~~~
     version = (1, 3, 6)
+    minimum_calibre_version = (1, 29, 0)
 
-    # #mark USB fingerprints
+    # #mark ~~~ USB fingerprints ~~~
     # Init the BCD and USB fingerprints sets
     _PRODUCT_ID = set([])
     _BCD = set([0x01])
