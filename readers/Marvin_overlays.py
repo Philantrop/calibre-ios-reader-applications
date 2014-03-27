@@ -407,6 +407,8 @@ if True:
 
             self.cached_books = cached_books
 
+            self._log_metrics(book_count=len(booklist))
+
             if self.prefs.get('development_mode', False):
                 self._log("cached %d books from Marvin:" % len(cached_books))
                 for p, v in self.cached_books.iteritems():
@@ -924,6 +926,10 @@ if True:
         self._log_location()
         self.eject()
         self.ios.disconnect_idevice()
+
+    def startup(self):
+        self._log_location()
+        self._log("Waiting for calibre connector...")
 
     def sync_booklists(self, booklists, end_session=True):
         '''

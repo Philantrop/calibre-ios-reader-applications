@@ -13,14 +13,15 @@ Source for this plugin is available as a Github repository at
 https://github.com/GRiker/calibre-apple-reader-applications,
 which also includes an overview of the communication protocol in README.md
 """
-import base64, cStringIO, datetime, imp, os, platform, re, sqlite3, sys, tempfile, time
+import base64, cStringIO, datetime, imp, mechanize, os, platform, re, sqlite3, sys, tempfile, time
 
 from collections import namedtuple
 from inspect import getmembers, isfunction
 from PIL import Image as PILImage
+from threading import Thread
 from types import MethodType
 
-from calibre import fit_image
+from calibre import browser, fit_image
 from calibre.constants import cache_dir as _cache_dir, islinux, isosx, iswindows
 #from calibre.devices.idevice.libimobiledevice import libiMobileDevice, libiMobileDeviceException
 from calibre.devices.interface import DevicePlugin
@@ -32,6 +33,7 @@ from calibre.ebooks.metadata import (author_to_author_sort, authors_to_string,
     MetaInformation, title_sort)
 from calibre.ebooks.metadata.epub import get_metadata, set_metadata
 from calibre.ebooks.metadata.book.base import Metadata
+from calibre.devices.errors import InitialConnectionError
 from calibre.gui2.device import device_signals
 from calibre.library import current_library_name
 from calibre.ptempfile import PersistentTemporaryDirectory
@@ -688,7 +690,8 @@ class iOSReaderApp(DriverBase, Logger):
                 self._class_reconfigure()
                 self.overlays_loaded = True
         else:
-            self._log_location("Preferred iOS reader app '%s' not installed" % self.ios_reader_app)
+            if self.ios_reader_app is not None:
+                self._log_location("Preferred iOS reader app '%s' not installed" % self.ios_reader_app)
 
         return False
 
@@ -1163,7 +1166,6 @@ class iOSReaderApp(DriverBase, Logger):
             exc_type, exc_value, exc_traceback = sys.exc_info()
             self._log_location("ERROR: {0}".format(
                 traceback.format_exception_only(exc_type, exc_value)[0].strip()))
-            from calibre.devices.errors import InitialConnectionError
             raise InitialConnectionError("Unable to connect to iDevice")
         return app_id
 
@@ -1316,6 +1318,79 @@ class iOSReaderApp(DriverBase, Logger):
             func=sys._getframe(1).f_code.co_name,
             arg1=arg1, arg2=arg2))
     """
+
+    def _log_metrics(self, book_count=-1):
+        '''
+        '''
+        self._log_location(self.ios_reader_app)
+        br = browser()
+        try:
+            br.open(PluginMetricsLogger.URL)
+            post = PluginMetricsLogger(device_os=self.device_profile['ProductVersion'],
+                             plugin=self.gui_name,
+                             udid=self.device_profile['UniqueDeviceID'],
+                             version="%d.%d.%d" % self.version
+                             )
+            post.req.add_header("DEVICE_MODEL", self.device_profile['ProductType'])
+            post.req.add_header("PLUGIN_PREFERRED_READER_APP", self.ios_reader_app)
+            post.req.add_header("PLUGIN_APP_ID", self.app_id)
+            post.req.add_header("PLUGIN_BOOK_COUNT", book_count)
+            post.start()
+        except Exception as e:
+            self._log("Plugin logger unreachable: {0}".format(e))
+
+class PluginMetricsLogger(Thread, Logger):
+    '''
+    Post an event to the logging server
+    '''
+    #URL = "http://192.168.1.105:7584"
+    URL = "http://calibre-plugins.dnsd.info:7584"
+
+    WAIT_FOR_RESPONSE = True
+    def __init__(self, device_os=None, plugin=None, version="0", udid=None):
+        Thread.__init__(self)
+        self.device_os = device_os
+        self.plugin = plugin
+        self.plugin_version = str(version)
+        self.udid = udid
+        self.construct_header()
+
+    def construct_header(self):
+        '''
+        Build the default header information describing the environment
+        '''
+        import platform
+        from calibre.constants import (__appname__, get_version, isportable, isosx,
+                                       isfrozen, is64bit, iswindows)
+        calibre_version = "{0}{1} isfrozen:{2} is64bit:{3}".format(
+            get_version(), ' Portable' if isportable else '', isfrozen, is64bit)
+        if isosx:
+            platform_profile = "OS X {0}".format(platform.mac_ver()[0])
+        else:
+            platform_profile = "{0} {1} {2}".format(
+                platform.platform(), platform.system(), platform.architecture())
+
+        self.req = mechanize.Request(self.URL)
+        self.req.add_header('CALIBRE_OS', platform_profile)
+        self.req.add_header('CALIBRE_PLUGIN', self.plugin)
+        self.req.add_header('CALIBRE_VERSION', calibre_version)
+        self.req.add_header('DEVICE_OS', self.device_os)
+        self.req.add_header('DEVICE_UDID', self.udid)
+        self.req.add_header('PLUGIN_VERSION', self.plugin_version)
+        #self._log_location(self.req.header_items())
+
+    def run(self):
+        br = browser()
+        try:
+            if self.WAIT_FOR_RESPONSE:
+                ans = br.open(self.req).read().strip()
+                self._log_location(ans)
+            else:
+                br.open_novisit(self.req)
+
+        except Exception as e:
+            import traceback
+            self._log(traceback.format_exc())
 
 
 class ReaderAppSignals(QObject):

@@ -216,6 +216,8 @@ if True:
 
             self.cached_books = cached_books
 
+            self._log_metrics(book_count=len(booklist))
+
         return booklist
 
     def can_handle(self, device_info, debug=False):
