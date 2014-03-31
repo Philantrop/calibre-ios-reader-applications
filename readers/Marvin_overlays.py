@@ -949,10 +949,25 @@ if True:
             # Recast thumbnails to bytearray for JSON
             booklist = list(booklists[0])
             for book in booklist:
-                if (book.thumbnail is not None and
-                    not isinstance(book.thumbnail, bytearray)):
-                    book.thumbnail = bytearray(book.thumbnail)
-            self._snapshot_booklist(booklist, self._profile_db())
+                if book.thumbnail is not None:
+                    try:
+                        if isinstance(book.thumbnail, tuple):
+                            # Is the thumb a tuple (x, y, bytes)?
+                            # Make sure bytes is a json-encodable bytearray
+                            if not isinstance(book.thumbnail[2], bytearray):
+                                book.thumbnail = tuple((book.thumbnail[0], book.thumbnail[1],
+                                                        bytearray(book.thumbnail[2])))
+
+                        elif not isinstance(book.thumbnail, bytearray):
+                            # Convert raw bytes to bytearray
+                            book.thumbnail = bytearray(book.thumbnail)
+                    except:
+                        import traceback
+                        self._log("title: {0}".format(book.title))
+                        self._log(traceback.format_exc())
+                        break
+            else:
+                self._snapshot_booklist(booklist, self._profile_db())
 
         # Automatic metadata management is disabled 2013-06-03 v0.1.11
         #self._log("automatic metadata management disabled")

@@ -559,7 +559,7 @@ class iOSReaderApp(DriverBase, Logger):
     temp_dir = None
     verbose = None
     # #mark ~~~ plugin version, minimum calibre version ~~~
-    version = (1, 3, 6)
+    version = (1, 3, 7)
     minimum_calibre_version = (1, 29, 0)
 
     # #mark ~~~ USB fingerprints ~~~
