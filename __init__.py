@@ -13,7 +13,7 @@ Source for this plugin is available as a Github repository at
 https://github.com/GRiker/calibre-apple-reader-applications,
 which also includes an overview of the communication protocol in README.md
 """
-import base64, cStringIO, datetime, imp, mechanize, os, platform, re, sqlite3, sys, tempfile, time
+import base64, cStringIO, datetime, hashlib, imp, mechanize, os, platform, re, sqlite3, sys, tempfile, time
 
 from collections import namedtuple
 from inspect import getmembers, isfunction
@@ -1321,15 +1321,19 @@ class iOSReaderApp(DriverBase, Logger):
 
     def _log_metrics(self, book_count=-1):
         '''
+        Post logging event
         '''
         if self.prefs.get('plugin_diagnostics', True):
             self._log_location(self.ios_reader_app)
             br = browser()
             try:
+                m = hashlib.md5()
+                m.update(self.device_profile['UniqueDeviceID'])
+                udid_hash = m.hexdigest()
                 br.open(PluginMetricsLogger.URL)
                 post = PluginMetricsLogger(device_os=self.device_profile['ProductVersion'],
                                  plugin=self.gui_name,
-                                 udid=self.device_profile['UniqueDeviceID'],
+                                 udid=udid_hash,
                                  version="%d.%d.%d" % self.version
                                  )
                 post.req.add_header("DEVICE_MODEL", self.device_profile['ProductType'])
@@ -1344,8 +1348,7 @@ class PluginMetricsLogger(Thread, Logger):
     '''
     Post an event to the logging server
     '''
-    #URL = "http://192.168.1.105:7584"
-    URL = "http://calibre-plugins.dnsd.info:7584"
+    URL = "http://calibre-plugins.com:7584"
 
     WAIT_FOR_RESPONSE = True
     def __init__(self, device_os=None, plugin=None, version="0", udid=None):

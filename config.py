@@ -100,6 +100,9 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self.reader_apps.currentIndexChanged.connect(self.show_plugin_tab)
         self.show_plugin_tab(None)
 
+        # Diagnostics opt-out
+        self.diagnostic_options_gb.setVisible(False)
+
     """
     def restart_required(self, *args):
         self._log_location()
