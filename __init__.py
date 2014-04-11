@@ -477,8 +477,11 @@ class DriverBase(DeviceConfig, DevicePlugin):
         if islinux and 'iBooks' in applist:
             applist.remove('iBooks')
         if isosx and platform.mac_ver()[0] >= "10.9":
-            self._log("*** iBooks is not supported > OS X 10.8 ***")
-            applist.remove('iBooks')
+            if not plugin_prefs.get('ibooks_override', False):
+                self._log("*** iBooks is not supported > OS X 10.8 ***")
+                applist.remove('iBooks')
+            else:
+                self._log("*** ibooks_override enabled under OS X {0} ***".format(platform.mac_ver()[0]))
         self.cw = ConfigWidget(self, applist)
         return self.cw
 
@@ -559,7 +562,7 @@ class iOSReaderApp(DriverBase, Logger):
     temp_dir = None
     verbose = None
     # #mark ~~~ plugin version, minimum calibre version ~~~
-    version = (1, 3, 7)
+    version = (1, 3, 8)
     minimum_calibre_version = (1, 29, 0)
 
     # #mark ~~~ USB fingerprints ~~~
@@ -1010,6 +1013,9 @@ class iOSReaderApp(DriverBase, Logger):
 
         # Special handling for iBooks, change class completely
         if self.ios_reader_app == 'iBooks':
+            # Post logging message without book_count
+            self._log_metrics()
+
             from calibre.devices.apple.driver import ITUNES
             ITUNES.VENDOR_ID = self.VENDOR_ID
             ITUNES.PRODUCT_ID = self.PRODUCT_ID
@@ -1327,41 +1333,41 @@ class iOSReaderApp(DriverBase, Logger):
             self._log_location(self.ios_reader_app)
             br = browser()
             try:
+                br.open(PluginMetricsLogger.URL)
+                args = {'plugin': self.gui_name,
+                        'version': "%d.%d.%d" % self.version}
+                post = PluginMetricsLogger(**args)
+                post.req.add_header('DEVICE_OS', self.device_profile['ProductVersion'])
+                post.req.add_header("DEVICE_MODEL", self.device_profile['ProductType'])
                 m = hashlib.md5()
                 m.update(self.device_profile['UniqueDeviceID'])
-                udid_hash = m.hexdigest()
-                br.open(PluginMetricsLogger.URL)
-                post = PluginMetricsLogger(device_os=self.device_profile['ProductVersion'],
-                                 plugin=self.gui_name,
-                                 udid=udid_hash,
-                                 version="%d.%d.%d" % self.version
-                                 )
-                post.req.add_header("DEVICE_MODEL", self.device_profile['ProductType'])
+                post.req.add_header('DEVICE_UDID', m.hexdigest())
+
                 post.req.add_header("PLUGIN_PREFERRED_READER_APP", self.ios_reader_app)
                 post.req.add_header("PLUGIN_APP_ID", self.app_id)
                 post.req.add_header("PLUGIN_BOOK_COUNT", book_count)
+                #self._log(post.req.header_items())
                 post.start()
             except Exception as e:
                 self._log("Plugin logger unreachable: {0}".format(e))
+
 
 class PluginMetricsLogger(Thread, Logger):
     '''
     Post an event to the logging server
     '''
     URL = "http://calibre-plugins.com:7584"
+    #URL = "http://localhost:8378"
 
-    WAIT_FOR_RESPONSE = True
-    def __init__(self, device_os=None, plugin=None, version="0", udid=None):
+    def __init__(self, **args):
         Thread.__init__(self)
-        self.device_os = device_os
-        self.plugin = plugin
-        self.plugin_version = str(version)
-        self.udid = udid
+        self.args = args
         self.construct_header()
 
     def construct_header(self):
         '''
-        Build the default header information describing the environment
+        Build the default header information describing the environment,
+        plus the passed plugin metadata
         '''
         import platform
         from calibre.constants import (__appname__, get_version, isportable, isosx,
@@ -1376,22 +1382,15 @@ class PluginMetricsLogger(Thread, Logger):
 
         self.req = mechanize.Request(self.URL)
         self.req.add_header('CALIBRE_OS', platform_profile)
-        self.req.add_header('CALIBRE_PLUGIN', self.plugin)
         self.req.add_header('CALIBRE_VERSION', calibre_version)
-        self.req.add_header('DEVICE_OS', self.device_os)
-        self.req.add_header('DEVICE_UDID', self.udid)
-        self.req.add_header('PLUGIN_VERSION', self.plugin_version)
-        #self._log_location(self.req.header_items())
+        self.req.add_header('CALIBRE_PLUGIN', self.args.get('plugin'))
+        self.req.add_header('PLUGIN_VERSION', self.args.get('version'))
 
     def run(self):
         br = browser()
         try:
-            if self.WAIT_FOR_RESPONSE:
-                ans = br.open(self.req).read().strip()
-                self._log_location(ans)
-            else:
-                br.open_novisit(self.req)
-
+            ans = br.open(self.req).read().strip()
+            self._log_location(ans)
         except Exception as e:
             import traceback
             self._log(traceback.format_exc())
