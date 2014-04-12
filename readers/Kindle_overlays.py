@@ -886,7 +886,7 @@ if True:
                          title_sort,
                          uuid
                         FROM metadata
-                        WHERE filename="?"
+                        WHERE filename=?
                     ''', (book, )
                    )
 
