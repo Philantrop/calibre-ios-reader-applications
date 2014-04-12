@@ -686,7 +686,7 @@ if True:
                                     filename,
                                     title
                                    FROM metadata
-                                   WHERE filename = {0}
+                                   WHERE filename = "{0}"
                                 '''.format(json.dumps(book.path)))
                     cached_book = cur.fetchone()
                     if cached_book:
@@ -886,7 +886,7 @@ if True:
                          title_sort,
                          uuid
                         FROM metadata
-                        WHERE filename=?
+                        WHERE filename="?"
                     ''', (book, )
                    )
 
