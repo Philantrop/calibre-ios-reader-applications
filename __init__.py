@@ -1365,6 +1365,7 @@ class PluginMetricsLogger(Thread, Logger):
     '''
     Post an event to the logging server
     '''
+    # #mark ~~~ logging URL ~~~
     URL = "http://calibre-plugins.com:7584"
     #URL = "http://localhost:8378"
 
