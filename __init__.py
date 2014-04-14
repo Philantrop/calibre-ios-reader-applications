@@ -1293,6 +1293,15 @@ class iOSReaderApp(DriverBase, Logger):
 
         return {'path': local_db_path, 'stats': db_stats}
 
+    def _quote_sqlite_identifier(self, str):
+        '''
+        Replace all " with ""
+        Wrap ans in double quotes
+        Allows embedded double quotes in sqlite identifiers
+        '''
+        ans = str.replace("\"", "\"\"")
+        return "\"" + ans + "\""
+
     """
     def _log(self, msg=None):
         '''

@@ -105,7 +105,7 @@ if True:
                             ''')
                 rows = cur.fetchall()
                 cached_books = [row[b'filename'] for row in rows]
-                #cached_books = [json.dumps(row[b'filename']) for row in rows]
+                #cached_books = [self._quote_sqlite_identifier(row[b'filename']) for row in rows]
                 if self.prefs.get('development_mode', False):
                     self._log("~~~ cached_books: ~~~")
                     for b in sorted(cached_books):
@@ -1094,15 +1094,6 @@ if True:
         local_path = out.name
 
         return local_path
-
-    def _quote_sqlite_identifier(self, str):
-        '''
-        Replace all " with ""
-        Wrap ans in double quotes
-        Allows embedded double quotes in sqlite identifiers
-        '''
-        ans = str.replace("\"", "\"\"")
-        return "\"" + ans + "\""
 
     def _reset_ios_connection(self,
                               app_installed=False,

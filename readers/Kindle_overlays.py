@@ -7,7 +7,7 @@ from __future__ import (unicode_literals, division, absolute_import,
 __license__ = 'GPL v3'
 __copyright__ = '2013, Gregory Riker'
 
-import base64, cStringIO, json, os, sqlite3, subprocess, time
+import base64, cStringIO, os, sqlite3, subprocess, time
 from datetime import datetime
 
 from calibre.constants import islinux, isosx, iswindows
@@ -111,7 +111,7 @@ if True:
                             ''')
                 rows = cur.fetchall()
                 cached_books = [row[b'filename'] for row in rows]
-                #cached_books = [json.dumps(row[b'filename']) for row in rows]
+                #cached_books = [self._quote_sqlite_identifier(row[b'filename']) for row in rows]
                 if self.prefs.get('development_mode', False):
                     self._log("~~~ cached_books: ~~~")
                     for b in sorted(cached_books):
@@ -145,8 +145,8 @@ if True:
                                             UPDATE metadata
                                             SET filename = {0}
                                             WHERE filename = {1}
-                                            '''.format(json.dumps(book),
-                                                       json.dumps(cb)))
+                                            '''.format(self._quote_sqlite_identifier(book),
+                                                       self._quote_sqlite_identifier(cb)))
                                 con.commit()
                                 book_moved = True
                                 moved_books.append(cb)
@@ -206,10 +206,10 @@ if True:
                 if orphans:
                     for book in orphans:
                         # Remove from db, update device copy
-                        self._log("Removing orphan %s from metadata" % json.dumps(book))
+                        self._log("Removing orphan %s from metadata" % self._quote_sqlite_identifier(book))
                         cur.execute('''DELETE FROM metadata
                                        WHERE filename = {0}
-                                    '''.format(json.dumps(book)))
+                                    '''.format(self._quote_sqlite_identifier(book)))
                 cur.close()
                 con.commit()
 
@@ -409,13 +409,13 @@ if True:
         with con:
             for book in paths:
                 # Remove from db, update device copy
-                self._log("Removing %s from local_metadata" % json.dumps(book))
+                self._log("Removing %s from local_metadata" % self._quote_sqlite_identifier(book))
                 with con:
                     con.row_factory = sqlite3.Row
                     cur = con.cursor()
                     cur.execute('''DELETE FROM metadata
                                    WHERE filename = {0}
-                                '''.format(json.dumps(book)))
+                                '''.format(self._quote_sqlite_identifier(book)))
             con.commit()
 
         # Copy the updated db to the iDevice
@@ -686,8 +686,8 @@ if True:
                                     filename,
                                     title
                                    FROM metadata
-                                   WHERE filename = "{0}"
-                                '''.format(json.dumps(book.path)))
+                                   WHERE filename = {0}
+                                '''.format(self._quote_sqlite_identifier(book.path)))
                     cached_book = cur.fetchone()
                     if cached_book:
                         if (book.title != cached_book[b'title'] or
@@ -703,7 +703,7 @@ if True:
                                                    self._escape_delimiters(author_to_author_sort(book.authors[0])),
                                                    self._escape_delimiters(book.title),
                                                    self._escape_delimiters(title_sort(book.title)),
-                                                   json.dumps(book.path)))
+                                                   self._quote_sqlite_identifier(book.path)))
 
                 con.commit()
 
@@ -870,7 +870,7 @@ if True:
     def _get_cached_metadata(self, cur, book):
         '''
         Return a populated Book object from a cached book's metadata
-        format(json.dumps(book)))
+        format(self._quote_sqlite_identifier(book)))
         '''
         self._log_location(book)
 
@@ -886,8 +886,8 @@ if True:
                          title_sort,
                          uuid
                         FROM metadata
-                        WHERE filename=?
-                    ''', (book, )
+                        WHERE filename={0}
+                    '''.format(self._quote_sqlite_identifier(book))
                    )
 
         cached_book = cur.fetchone()
