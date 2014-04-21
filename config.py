@@ -47,8 +47,8 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self.version = parent.version
 
         # Restore the caching settings
-        self.booklist_caching_cb.setChecked(self.prefs.get('booklist_caching', True))
-        self.booklist_cache_limit_sb.setValue(self.prefs.get('booklist_cache_limit', 1.00))
+        self.device_booklist_caching_cb.setChecked(self.prefs.get('device_booklist_caching', True))
+        self.device_booklist_cache_limit_sb.setValue(self.prefs.get('device_booklist_cache_limit', 1.00))
 
         # Restore the diagnostic settings
         self.plugin_diagnostics.setChecked(self.prefs.get('plugin_diagnostics', True))
@@ -90,7 +90,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
         #self.debug_libimobiledevice.stateChanged.connect(self.restart_required)
 
         # Callback when booklist_caching_cb changes - enable/disable spinbox
-        self.booklist_caching_cb.stateChanged.connect(self.booklist_caching_changed)
+        self.device_booklist_caching_cb.stateChanged.connect(self.device_booklist_caching_changed)
 
         # Add the app_list to the dropdown
         self.reader_apps.blockSignals(True)
@@ -115,16 +115,16 @@ class ConfigWidget(QWidget, Ui_Dialog):
     def restart_required(self, *args):
         self._log_location()
     """
-    def booklist_caching_changed(self, enabled):
+    def device_booklist_caching_changed(self, enabled):
         self._log_location(bool(enabled))
-        self.booklist_cache_limit_sb.setEnabled(bool(enabled))
+        self.device_booklist_cache_limit_sb.setEnabled(bool(enabled))
 
     def save_settings(self):
         self._log_location()
 
         # Save cache settings
-        self.prefs.set('booklist_caching', self.booklist_caching_cb.isChecked())
-        self.prefs.set('booklist_cache_limit', self.booklist_cache_limit_sb.value())
+        self.prefs.set('device_booklist_caching', self.device_booklist_caching_cb.isChecked())
+        self.prefs.set('device_booklist_cache_limit', self.device_booklist_cache_limit_sb.value())
 
         # Save general settings
         self.prefs.set('plugin_diagnostics', self.plugin_diagnostics.isChecked())

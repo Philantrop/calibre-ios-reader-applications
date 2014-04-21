@@ -188,7 +188,7 @@ p, li { white-space: pre-wrap; }
                </widget>
               </item>
               <item row="1" column="1">
-               <widget class="QSpinBox" name="booklist_cache_limit_sb">
+               <widget class="QSpinBox" name="device_booklist_cache_limit_sb">
                 <property name="suffix">
                  <string>%</string>
                 </property>
@@ -208,7 +208,7 @@ p, li { white-space: pre-wrap; }
                </widget>
               </item>
               <item row="0" column="0">
-               <widget class="QCheckBox" name="booklist_caching_cb">
+               <widget class="QCheckBox" name="device_booklist_caching_cb">
                 <property name="text">
                  <string>Enable booklist caching</string>
                 </property>
