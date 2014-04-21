@@ -1865,18 +1865,21 @@ if True:
                 path = ''.join(shorten_components_to(245-plen, [path]))
             local_booklist_db_path = os.path.join(self.resources_path, path)
 
-            db_stats = self.ios.stat(self.booklist_subpath)
+            local_db_exists = False
             if os.path.exists(local_booklist_db_path):
                 self._log("existing booklist.db in resource folder")
+                local_db_exists = True
 
-            elif self.prefs.get('device_booklist_caching', True) and db_stats:
-                # Copy existing from iDevice to local resource folder
-                mbs = int(int(db_stats['st_size']) / (1024*1024))
-                self._log("copying booklist.db from device ({0:,} MB)".format(mbs))
-                with open(local_booklist_db_path, 'wb') as out:
-                    self.ios.copy_from_idevice(self.booklist_subpath, out)
+            elif self.prefs.get('device_booklist_caching', True):
+                db_stats = self.ios.stat(self.booklist_subpath)
+                if db_stats:
+                    mbs = int(int(db_stats['st_size']) / (1024*1024))
+                    self._log("copying booklist.db from device ({0:,} MB)".format(mbs))
+                    with open(local_booklist_db_path, 'wb') as out:
+                        self.ios.copy_from_idevice(self.booklist_subpath, out)
+                    local_db_exists = True
 
-            else:
+            if not local_db_exists:
                 # No existing caches, create new booklist DB locally
                 self._log("creating new booklist.db")
                 conn = sqlite3.connect(local_booklist_db_path)
