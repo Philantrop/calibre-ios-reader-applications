@@ -562,7 +562,7 @@ class iOSReaderApp(DriverBase, Logger):
     temp_dir = None
     verbose = None
     # #mark ~~~ plugin version, minimum calibre version ~~~
-    version = (1, 3, 8)
+    version = (1, 3, 9)
     minimum_calibre_version = (1, 29, 0)
 
     # #mark ~~~ USB fingerprints ~~~
@@ -1337,6 +1337,9 @@ class iOSReaderApp(DriverBase, Logger):
     def _log_metrics(self, book_count=-1):
         '''
         Post logging event
+        No identifying information or library metadata is included in the logging event.
+        Encrypt device udid before logging so we have an anonymous (but unique) device id for
+        determining number of unique devices using plugin.
         '''
         if self.prefs.get('plugin_diagnostics', True):
             self._log_location(self.ios_reader_app)

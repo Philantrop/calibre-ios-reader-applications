@@ -4,7 +4,7 @@
 from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
-import atexit, base64, copy, cStringIO, hashlib, json, locale, os, posixpath, re, sqlite3, time
+import atexit, base64, copy, cStringIO, hashlib, json, locale, os, posixpath, re, sqlite3, sys, time
 from datetime import datetime
 from lxml import etree, html
 
@@ -42,6 +42,11 @@ IOS_COMMUNICATION_ERROR_DETAILS = (
 
 OCF_NS = 'urn:oasis:names:tc:opendocument:xmlns:container'
 OPF_NS = 'http://www.idpf.org/2007/opf'
+
+class MainDBMismatchException(Exception):
+    ''' '''
+    pass
+
 
 if True:
     '''
@@ -94,6 +99,7 @@ if True:
         # Initialize the IO components with iOS path separator
         self.staging_folder = '/'.join(['/Library', 'calibre'])
 
+        self.booklist_subpath = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.db'])
         self.books_subpath = '/Library/mainDb.sqlite'
         self.connected_fs = '/'.join([self.staging_folder, 'connected.xml'])
         self.flags = {
@@ -109,6 +115,7 @@ if True:
             'ejected': False,
             'udid': 0
             }
+        self.local_booklist_db_path = None
         self.marvin_version = (1,0,0)
         self.operation_timed_out = False
         self.path_template = '{0}.epub'
@@ -126,6 +133,7 @@ if True:
             zfw.close()
         else:
             self._log("existing thumb cache at '%s'" % self.archive_path)
+
 
         # ~~~~~~~~~ Create a device signal class for Marvin Manager ~~~~~~~~~
         self.marvin_device_signals = ReaderAppSignals()
@@ -207,7 +215,8 @@ if True:
             if stats:
                 cover_bytes = self.ios.read(cover_path, mode='rb')
             else:
-                self._log_location("no cover available for '{0}'".format(title))
+                if self.prefs.get('development_mode', False):
+                    self._log_location("no cover available for '{0}'".format(title))
             return cover_bytes
 
         def _get_marvin_genres(cur, book_id):
@@ -259,10 +268,13 @@ if True:
             self._log_location()
 
             # Fetch current metadata from Marvin's DB
+            if self.report_progress is not None:
+                self.report_progress(float(0.01), "Importing Marvin database…")
             self._localize_database_path(self.books_subpath)
             cached_books = {}
 
             if self.prefs.get('booklist_caching', True):
+                self.local_booklist_db_path = self._localize_booklist_db()
                 booklist = self._restore_from_snapshot()
 
             if not booklist:
@@ -378,6 +390,8 @@ if True:
 
                     # Snapshot booklist for optimized reload
                     if self.prefs.get('booklist_caching', True):
+                        if self.report_progress is not None:
+                            self.report_progress(0.99, "caching booklist…")
                         self._snapshot_booklist(booklist, self._profile_db())
 
             # Populate cached_books
@@ -1823,6 +1837,66 @@ if True:
             raise InvalidEpub('OPF file in container.xml not found in:%s'%path_to_book)
         return opf_name
 
+    def _localize_booklist_db(self):
+        local_booklist_db_path = None
+        if self.prefs.get('booklist_caching', True):
+
+            path = self.booklist_subpath.split('/')[-1]
+            if iswindows:
+                from calibre.utils.filenames import shorten_components_to
+                plen = len(self.temp_dir)
+                path = ''.join(shorten_components_to(245-plen, [path]))
+            local_booklist_db_path = os.path.join(self.temp_dir, path)
+            db_stats = self.ios.stat(self.booklist_subpath)
+            if db_stats:
+                # Copy existing from iDevice
+                mbs = int(int(db_stats['st_size']) / (1024*1024))
+                self._log("copying local_booklist_db from {0} ({1:,} MB)".format(
+                    repr(self.booklist_subpath), mbs))
+                with open(local_booklist_db_path, 'wb') as out:
+                    self.ios.copy_from_idevice(self.booklist_subpath, out)
+            else:
+                # Create booklist DB locally
+                conn = sqlite3.connect(local_booklist_db_path)
+                conn.execute('''PRAGMA user_version = "1" ''')
+                # Create the booklist table within the booklist DB
+                TABLE_TEMPLATE = '''
+                    CREATE TABLE IF NOT EXISTS "{table_name}"
+                    ({columns})'''
+                with conn:
+                    cur = conn.cursor()
+                    # Build the booklist table
+                    args = {'table_name': 'booklist',
+                            'columns': ("uuid TEXT, "
+                                        "author_sort TEXT, "
+                                        "authors TEXT, "
+                                        "comments TEXT, "
+                                        "cover_hash TEXT, "
+                                        "datetime TEXT, "
+                                        "description TEXT, "
+                                        "device_collections TEXT, "
+                                        "path TEXT UNIQUE, "
+                                        "pubdate TEXT, "
+                                        "publisher TEXT, "
+                                        "rating TEXT, "
+                                        "series TEXT, "
+                                        "series_index TEXT, "
+                                        "size TEXT, "
+                                        "tags TEXT, "
+                                        "thumbnail TEXT, "
+                                        "title TEXT, "
+                                        "title_sort TEXT")}
+                    cur.execute(TABLE_TEMPLATE.format(**args))
+
+                    # Build the mainDb_profile table
+                    args = {'table_name': 'mainDb_profile',
+                            'columns': "mainDb_profile TEXT"}
+                    cur.execute(TABLE_TEMPLATE.format(**args))
+
+                conn.close()
+
+        return local_booklist_db_path
+
     def _localize_database_path(self, remote_db_path):
         '''
         Copy remote_db_path from iOS to local storage as needed
@@ -1858,7 +1932,7 @@ if True:
 
             # If we don't have a valid local copy, update from iDevice
             if not local_db_path:
-                self._log("updating local_db from %s" % repr(remote_db_path))
+                self._log("copying local_db from %s" % repr(remote_db_path))
                 with open(full_path, 'wb') as out:
                     self.ios.copy_from_idevice(remote_db_path, out)
                 local_db_path = out.name
@@ -2120,12 +2194,64 @@ if True:
 
     def _restore_from_snapshot(self):
         '''
-        Try to restore booklist.zip from last session
+        Try to restore booklist.db from last session
         '''
         self._log_location()
+
         booklist = BookList(self)
         restored = False
 
+        remote_booklist_db_path = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.db'])
+
+        if self.ios.exists(remote_booklist_db_path, silent=True):
+            if self.report_progress is not None:
+                self.report_progress(0.02, 'Analyzing cached booklist')
+
+            try:
+                # Copy the cached booklist to a local temp file
+                with TemporaryFile() as local_db:
+                    with open(local_db, 'wb') as f:
+                        self.ios.copy_from_idevice(remote_booklist_db_path, f)
+
+                    conn = sqlite3.connect(str(local_db))
+                    conn.row_factory = sqlite3.Row
+                    cur = conn.cursor()
+
+                    # Get the stored mainDb_profile
+                    cur.execute('''SELECT mainDb_profile FROM mainDb_profile''')
+                    row = cur.fetchone()
+                    stored_mainDb_profile = json.loads(row[b'mainDb_profile'])
+                    if not self._compare_mainDb_profiles(stored_mainDb_profile):
+                        raise MainDBMismatchException("mainDb_profile does not match")
+
+                    # Get the booklist items
+                    cur.execute('''SELECT * from booklist''')
+                    rows = cur.fetchall()
+                    _booklist = []
+                    for x, row in enumerate(rows):
+                        if self.report_progress is not None:
+                            self.report_progress(float(x/len(rows)), 'Restoring cached booklist')
+                        this_book = {}
+                        keys = row.keys()
+                        for key in keys:
+                            this_book[key] = json.loads(row[key], object_hook=from_json)
+                        _booklist.append(this_book)
+                    self._log("booklist restored from cached snapshot")
+                    booklist = self._rehydrate_booklist(_booklist)
+                    restored = True
+            except:
+                import traceback
+                self._log("*** error reading from cached booklist ***")
+                self._log(traceback.format_exc())
+                booklist = BookList(self)
+
+        else:
+            self._log("no existing booklist.db cache")
+
+        if not restored:
+            self._log("unable to restore booklist from cache")
+        return booklist
+        """
         archive_path = '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip'])
         if self.ios.exists(archive_path, silent=True):
             if self.report_progress is not None:
@@ -2159,9 +2285,7 @@ if True:
                     self._log("*** error reading from cached booklist ***")
                     self._log(traceback.format_exc())
                     booklist = BookList(self)
-        if not restored:
-            self._log("unable to restore booklist from cache")
-        return booklist
+        """
 
     def _schedule_metadata_update(self, target_epub, book, update_soup):
         '''
@@ -2296,27 +2420,74 @@ if True:
         Enables optimized reload after disconnect
         booklist: BookList() object
         profile: snapshot of mainDb
+        dehydrated: list of jsonizable dicts
+        called from books() and sync_booklists() if booklist_caching enabled
         '''
+        INSERT_TEMPLATE = '''
+            INSERT OR REPLACE INTO "{table_name}"
+            ({columns})
+            VALUES({values})'''
+
         self._log_location()
+        self._log("updating booklist.db".format(repr(self.local_booklist_db_path)))
+        _dehydrated = self._dehydrate_booklist(booklist)
+        conn = sqlite3.connect(str(self.local_booklist_db_path))
 
-        dehydrated = self._dehydrate_booklist(booklist)
-        self._log("generating booklist.zip")
-        # Confirm path to cache folder exists
-        folder_exists = self.ios.exists(self.REMOTE_CACHE_FOLDER)
-        if not folder_exists:
-            self._log("creating remote_cache_folder at {0}".format(self.REMOTE_CACHE_FOLDER))
-            self.ios.mkdir(self.REMOTE_CACHE_FOLDER)
+        # Build the database
+        with conn:
+            for book in _dehydrated:
+                args = {'table_name': 'booklist',
+                        'columns': ", ".join(sorted(book.keys())),
+                        'values': ", ".join(['?' for k in book.keys()])
+                       }
+                values_template = INSERT_TEMPLATE.format(**args)
 
-        # Build the zip archive
-        with TemporaryFile() as zipf:
-            with ZipFile(zipf, 'w') as zfw:
-                zfw.writestr("mainDb_profile.json", json.dumps(profile, default=to_json, indent=2, sort_keys=True))
-                zfw.writestr("booklist.json", json.dumps(dehydrated, default=to_json, indent=2, sort_keys=True))
+                # Construct a list of values to be inserted
+                values = []
+                for key, value in sorted(book.iteritems()):
+                    values.append(json.dumps(value, default=to_json, indent=2, sort_keys=True))
 
-            # Copy the archive to the remote cache folder
-            self.ios.copy_to_idevice(str(zipf),
-                '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.zip']))
-        self._log("booklist.zip stored to {0}".format(self.REMOTE_CACHE_FOLDER))
+                # Add book details to DB
+                conn.execute(values_template, tuple(values))
+
+            # Add the mainDb_profile after deleting previous entry(s)
+            conn.execute('''DELETE FROM "mainDb_profile"''')
+
+            args = {'table_name': 'mainDb_profile',
+                    'columns': "mainDb_profile",
+                    'values': "?"}
+            values_template = INSERT_TEMPLATE.format(**args)
+            conn.execute(values_template, tuple([json.dumps(profile, default=to_json, indent=2, sort_keys=True)]))
+        conn.close()
+
+        # Check file size versus available storage
+        db_size = int(os.stat(self.local_booklist_db_path).st_size)
+        available = int(self.device_profile['FSFreeBytes'])
+
+        # Config dialog limits cache size to 1-10% of available storage space
+        allocated = float(self.prefs.get('booklist_cache_limit', 1.0) / 100)
+        max_allowed = available * allocated
+        if db_size > max_allowed:
+            self._log("allocated storage for booklist cache: {0:,} MB ({1}% of {2:,} MB free space)".format(
+                int(max_allowed/(1024*1024)), allocated * 100, int(available / (1024*1024))))
+            self._log("actual cache size: {0:,} MB".format(int(db_size/(1024*1024))))
+            self._log("size of cached booklist exceeds allocated storage, no cache created")
+            # Delete existing cache
+            rhc = b'/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.db'])
+            if self.ios.exists(rhc):
+                self.ios.remove(rhc)
+
+        else:
+            # Confirm path to cache folder exists
+            folder_exists = self.ios.exists(self.REMOTE_CACHE_FOLDER)
+            if not folder_exists:
+                self._log("creating remote_cache_folder at {0}".format(self.REMOTE_CACHE_FOLDER))
+                self.ios.mkdir(self.REMOTE_CACHE_FOLDER)
+
+            # Copy booklist.db to the remote cache folder
+            self._log("copying booklist.db to remote_cache_folder")
+            self.ios.copy_to_idevice(str(self.local_booklist_db_path),
+                '/'.join([self.REMOTE_CACHE_FOLDER, 'booklist.db']))
 
     def _stage_command_file(self, command_name, command_soup, show_command=False):
         fl = locale.format("%d", len(command_soup.renderContents()), grouping=True)

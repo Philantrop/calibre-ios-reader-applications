@@ -46,12 +46,17 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self.support_label.setOpenExternalLinks(True)
         self.version = parent.version
 
+        # Restore the caching settings
+        self.booklist_caching_cb.setChecked(self.prefs.get('booklist_caching', True))
+        self.booklist_cache_limit_sb.setValue(self.prefs.get('booklist_cache_limit', 1.00))
+
         # Restore the diagnostic settings
         self.plugin_diagnostics.setChecked(self.prefs.get('plugin_diagnostics', True))
 
         # Restore the debug settings
         self.debug_plugin.setChecked(self.prefs.get('debug_plugin', False))
         self.debug_libimobiledevice.setChecked(self.prefs.get('debug_libimobiledevice', False))
+
 
         # Load the widgets
         self.widgets = []
@@ -84,6 +89,9 @@ class ConfigWidget(QWidget, Ui_Dialog):
         #self.debug_plugin.stateChanged.connect(self.restart_required)
         #self.debug_libimobiledevice.stateChanged.connect(self.restart_required)
 
+        # Callback when booklist_caching_cb changes - enable/disable spinbox
+        self.booklist_caching_cb.stateChanged.connect(self.booklist_caching_changed)
+
         # Add the app_list to the dropdown
         self.reader_apps.blockSignals(True)
         self.reader_apps.addItems([''])
@@ -107,9 +115,16 @@ class ConfigWidget(QWidget, Ui_Dialog):
     def restart_required(self, *args):
         self._log_location()
     """
+    def booklist_caching_changed(self, enabled):
+        self._log_location(bool(enabled))
+        self.booklist_cache_limit_sb.setEnabled(bool(enabled))
 
     def save_settings(self):
         self._log_location()
+
+        # Save cache settings
+        self.prefs.set('booklist_caching', self.booklist_caching_cb.isChecked())
+        self.prefs.set('booklist_cache_limit', self.booklist_cache_limit_sb.value())
 
         # Save general settings
         self.prefs.set('plugin_diagnostics', self.plugin_diagnostics.isChecked())
@@ -176,7 +191,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
 
 # For testing ConfigWidget, run from command line:
 # cd ~/Documents/calibredev/iOS_reader_applications
-# calibre-debug config.py
+# calibre-debug config.py 2> >(grep -v 'CoreAnimation\|CoreText\|modalSession' 1>&2)
 # Search 'iOS Reader Apps'
 if __name__ == '__main__':
     from PyQt4.Qt import QApplication
