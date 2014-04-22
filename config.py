@@ -28,6 +28,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
     '''
     # Location reporting template
     LOCATION_TEMPLATE = "{cls}:{func}({arg1}) {arg2}"
+    CACHING_READER_APPS = ['Marvin']
 
     def __init__(self, parent, app_list):
         #QDialog.__init__(self)
@@ -89,6 +90,9 @@ class ConfigWidget(QWidget, Ui_Dialog):
         #self.debug_plugin.stateChanged.connect(self.restart_required)
         #self.debug_libimobiledevice.stateChanged.connect(self.restart_required)
 
+        # Callback when reader_app changes
+        self.reader_apps.currentIndexChanged.connect(self.reader_app_changed)
+
         # Callback when booklist_caching_cb changes - enable/disable spinbox
         self.device_booklist_caching_cb.stateChanged.connect(self.device_booklist_caching_changed)
 
@@ -102,6 +106,10 @@ class ConfigWidget(QWidget, Ui_Dialog):
         idx = self.reader_apps.findText(pref)
         if idx > -1:
             self.reader_apps.setCurrentIndex(idx)
+
+        # Initially set caching_gb visibility
+        self.reader_app_changed(idx)
+
         self.reader_apps.blockSignals(False)
 
         # Init the plugin tab to currently selected reader app
@@ -118,6 +126,14 @@ class ConfigWidget(QWidget, Ui_Dialog):
     def device_booklist_caching_changed(self, enabled):
         self._log_location(bool(enabled))
         self.device_booklist_cache_limit_sb.setEnabled(bool(enabled))
+
+    def reader_app_changed(self, index):
+        '''
+        If the selected app supports caching app, show caching controls
+        '''
+        preferred = str(self.reader_apps.itemText(index))
+        self._log_location(preferred)
+        self.caching_gb.setVisible(preferred in self.CACHING_READER_APPS)
 
     def save_settings(self):
         self._log_location()

@@ -177,18 +177,31 @@ p, li { white-space: pre-wrap; }
               <string>Caching</string>
              </property>
              <layout class="QGridLayout" name="gridLayout_4">
-              <item row="1" column="0">
-               <widget class="QLabel" name="label_2">
+              <item row="0" column="0" colspan="5">
+               <widget class="QCheckBox" name="device_booklist_caching_cb">
                 <property name="text">
-                 <string>Limit cache size to</string>
-                </property>
-                <property name="alignment">
-                 <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+                 <string>Enable booklist caching on device</string>
                 </property>
                </widget>
               </item>
-              <item row="1" column="1">
+              <item row="1" column="1" colspan="2">
+               <widget class="QLabel" name="label_2">
+                <property name="text">
+                 <string>Limit cache to</string>
+                </property>
+                <property name="alignment">
+                 <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
+                </property>
+               </widget>
+              </item>
+              <item row="1" column="3">
                <widget class="QSpinBox" name="device_booklist_cache_limit_sb">
+                <property name="sizePolicy">
+                 <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+                  <horstretch>0</horstretch>
+                  <verstretch>0</verstretch>
+                 </sizepolicy>
+                </property>
                 <property name="suffix">
                  <string>%</string>
                 </property>
@@ -200,19 +213,25 @@ p, li { white-space: pre-wrap; }
                 </property>
                </widget>
               </item>
-              <item row="1" column="2">
+              <item row="1" column="4">
                <widget class="QLabel" name="label_3">
                 <property name="text">
                  <string>of available space</string>
                 </property>
                </widget>
               </item>
-              <item row="0" column="0">
-               <widget class="QCheckBox" name="device_booklist_caching_cb">
-                <property name="text">
-                 <string>Enable booklist caching</string>
+              <item row="1" column="5">
+               <spacer name="horizontalSpacer_right">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
                 </property>
-               </widget>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
               </item>
              </layout>
             </widget>
