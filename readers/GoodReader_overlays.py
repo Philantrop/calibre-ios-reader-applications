@@ -204,6 +204,7 @@ if True:
                         cur.execute('''DELETE FROM metadata
                                        WHERE filename = {0}
                                     '''.format(self._quote_sqlite_identifier(book)))
+                    con.execute('''VACUUM''')
                 cur.close()
                 con.commit()
 
@@ -400,16 +401,16 @@ if True:
 
         # Update the db
         con = sqlite3.connect(self.local_metadata)
+        con.row_factory = sqlite3.Row
+        cur = con.cursor()
         with con:
             for book in paths:
                 # Remove from db, update device copy
                 self._log("Removing %s from local_metadata" % self._quote_sqlite_identifier(book))
-                with con:
-                    con.row_factory = sqlite3.Row
-                    cur = con.cursor()
-                    cur.execute('''DELETE FROM metadata
-                                   WHERE filename = {0}
-                                '''.format(self._quote_sqlite_identifier(book)))
+                cur.execute('''DELETE FROM metadata
+                               WHERE filename = {0}
+                            '''.format(self._quote_sqlite_identifier(book)))
+            con.execute('''VACUUM''')
             con.commit()
 
         # Copy the updated db to the iDevice
