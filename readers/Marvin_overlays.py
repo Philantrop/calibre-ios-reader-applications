@@ -381,6 +381,9 @@ if True:
                         this_book.title_sort = row[b'CalibreTitleSort']
                         this_book.uuid = row[b'UUID']
 
+                        if self.prefs.get('development_mode', False):
+                            self._log("*** adding '{0}' to booklist".format(this_book.title))
+
                         booklist.add_book(this_book, False)
 
                         if self.report_progress is not None:
@@ -641,6 +644,7 @@ if True:
         booklist_conn = sqlite3.connect(str(self.local_booklist_db_path))
         with booklist_conn:
             booklist_conn.execute('''DELETE FROM "booklist"''')
+            booklist_conn.execute('''VACUUM''')
 
         command_name = 'delete_books'
         command_element = 'deletebooks'
@@ -1266,6 +1270,8 @@ if True:
         booklist_conn = sqlite3.connect(str(self.local_booklist_db_path))
         with booklist_conn:
             booklist_conn.execute('''DELETE FROM "booklist"''')
+            booklist_conn.execute('''VACUUM''')
+
 
         # Init the upload_books command file
         # <command>, <timestamp>, <overwrite existing>
@@ -2497,6 +2503,8 @@ if True:
                 for key, value in sorted(book.iteritems()):
                     values.append(json.dumps(value, default=to_json, indent=2, sort_keys=True))
 
+                if self.prefs.get('development_mode', False):
+                    self._log("*** adding '{0}' to DB".format(values[16]))
                 # Add book details to DB
                 conn.execute(values_template, tuple(values))
 
