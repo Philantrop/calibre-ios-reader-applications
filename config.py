@@ -48,8 +48,8 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self.version = parent.version
 
         # Restore the caching settings
-        self.device_booklist_caching_cb.setChecked(self.prefs.get('device_booklist_caching', True))
-        self.device_booklist_cache_limit_sb.setValue(self.prefs.get('device_booklist_cache_limit', 1.00))
+        self.device_booklist_caching_cb.setChecked(self.prefs.get('device_booklist_caching', False))
+        self.device_booklist_cache_limit_sb.setValue(self.prefs.get('device_booklist_cache_limit', 10.00))
 
         # Restore the diagnostic settings
         self.plugin_diagnostics.setChecked(self.prefs.get('plugin_diagnostics', True))

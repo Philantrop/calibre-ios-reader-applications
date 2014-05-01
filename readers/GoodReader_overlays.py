@@ -88,6 +88,7 @@ if True:
         booklist = BookList(oncard, None, None)
         if not oncard:
             self._log_location()
+            start_time = time.time()
             cached_books = {}
 
             # Get a local copy of metadata db. If it doesn't exist on device, create it
@@ -217,7 +218,9 @@ if True:
 
             self.cached_books = cached_books
 
-            self._log_metrics(book_count=len(booklist))
+            metrics = {'book_count': len(booklist),
+                       'load_time': time.time() - start_time}
+            self._log_metrics(metrics=metrics)
 
         return booklist
 

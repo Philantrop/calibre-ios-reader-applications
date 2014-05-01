@@ -1302,44 +1302,12 @@ class iOSReaderApp(DriverBase, Logger):
         ans = str.replace("\"", "\"\"")
         return "\"" + ans + "\""
 
-    """
-    def _log(self, msg=None):
-        '''
-        Print msg to console
-        '''
-        if not self.verbose:
-            return
-
-        if msg:
-            debug_print(" %s" % str(msg))
-        else:
-            debug_print()
-
-    def _log_location(self, *args):
-        '''
-        Print location, args to console
-        '''
-        if not self.verbose:
-            return
-
-        arg1 = arg2 = ''
-
-        if len(args) > 0:
-            arg1 = str(args[0])
-        if len(args) > 1:
-            arg2 = str(args[1])
-
-        debug_print(self.LOCATION_TEMPLATE.format(cls=self.__class__.__name__,
-            func=sys._getframe(1).f_code.co_name,
-            arg1=arg1, arg2=arg2))
-    """
-
-    def _log_metrics(self, book_count=-1):
+    def _log_metrics(self, metrics={}):
         '''
         Post logging event
         No identifying information or library metadata is included in the logging event.
-        Encrypt device udid before logging so we have an anonymous (but unique) device id for
-        determining number of unique devices using plugin.
+        device_udid is securely encrypted before logging for an anonymous (but unique) id,
+        used to determine number of unique devices using plugin.
         '''
         if self.prefs.get('plugin_diagnostics', True):
             self._log_location(self.ios_reader_app)
@@ -1351,14 +1319,14 @@ class iOSReaderApp(DriverBase, Logger):
                 post = PluginMetricsLogger(**args)
                 post.req.add_header('DEVICE_OS', self.device_profile['ProductVersion'])
                 post.req.add_header("DEVICE_MODEL", self.device_profile['ProductType'])
+                # Encrypt the device udid using MD5 encryption
                 m = hashlib.md5()
                 m.update(self.device_profile['UniqueDeviceID'])
                 post.req.add_header('DEVICE_UDID', m.hexdigest())
-
                 post.req.add_header("PLUGIN_PREFERRED_READER_APP", self.ios_reader_app)
                 post.req.add_header("PLUGIN_APP_ID", self.app_id)
-                post.req.add_header("PLUGIN_BOOK_COUNT", book_count)
-                #self._log(post.req.header_items())
+                post.req.add_header("PLUGIN_BOOK_COUNT", metrics.get('book_count', -1))
+                post.req.add_header("PLUGIN_LOAD_TIME", int(metrics.get('load_time', -1)))
                 post.start()
             except Exception as e:
                 self._log("Plugin logger unreachable: {0}".format(e))
