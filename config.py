@@ -34,7 +34,6 @@ class ConfigWidget(QWidget, Ui_Dialog):
         #QDialog.__init__(self)
         QWidget.__init__(self)
         Ui_Dialog.__init__(self)
-
         self.current_plugin = None
         self.gui = get_gui()
         self.icon = parent.icon
@@ -48,8 +47,18 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self.version = parent.version
 
         # Restore the caching settings
-        self.device_booklist_caching_cb.setChecked(self.prefs.get('device_booklist_caching', False))
-        self.device_booklist_cache_limit_sb.setValue(self.prefs.get('device_booklist_cache_limit', 10.00))
+        device_caching_enabled = self.prefs.get('device_booklist_caching', False)
+        self.device_booklist_caching_cb.setChecked(device_caching_enabled)
+        self.device_booklist_cache_limit_sb.setEnabled(device_caching_enabled)
+        self.available_space = self.parent.free_space()[0]
+        self.allocation_factor = self.prefs.get('device_booklist_cache_limit', 10.00)
+        self.device_booklist_cache_limit_sb.setValue(self.allocation_factor)
+        if self.available_space == -1:
+            self.allocated_space_label.setVisible(False)
+        else:
+            # If device connected, hook changes to spinbox and init display
+            self.device_booklist_cache_limit_sb.valueChanged.connect(self.device_caching_allocation_changed)
+            self.device_caching_allocation_changed(self.allocation_factor)
 
         # Restore the diagnostic settings
         self.plugin_diagnostics.setChecked(self.prefs.get('plugin_diagnostics', True))
@@ -57,7 +66,6 @@ class ConfigWidget(QWidget, Ui_Dialog):
         # Restore the debug settings
         self.debug_plugin.setChecked(self.prefs.get('debug_plugin', False))
         self.debug_libimobiledevice.setChecked(self.prefs.get('debug_libimobiledevice', False))
-
 
         # Load the widgets
         self.widgets = []
@@ -126,6 +134,20 @@ class ConfigWidget(QWidget, Ui_Dialog):
     def device_booklist_caching_changed(self, enabled):
         self._log_location(bool(enabled))
         self.device_booklist_cache_limit_sb.setEnabled(bool(enabled))
+
+    def device_caching_allocation_changed(self, val):
+        '''
+        Compute and display allocated space
+        '''
+        self.allocation_factor = val
+        allocated_space = int(self.available_space * (self.allocation_factor / 100))
+        if allocated_space > 1024 * 1024 * 1024:
+            allocated_space = allocated_space / (1024 * 1024 * 1024)
+            fmt_str = "({:.2f} GB)"
+        else:
+            allocated_space = int(allocated_space / (1024 * 1024))
+            fmt_str = "({:,} MB)"
+        self.allocated_space_label.setText(fmt_str.format(allocated_space))
 
     def reader_app_changed(self, index):
         '''

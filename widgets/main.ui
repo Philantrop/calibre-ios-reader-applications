@@ -171,13 +171,13 @@ p, li { white-space: pre-wrap; }
            <item row="3" column="0" colspan="3">
             <widget class="QGroupBox" name="caching_gb">
              <property name="toolTip">
-              <string>Allow caching for faster initialization</string>
+              <string>Enable caching for faster initialization when using more than one iDevice</string>
              </property>
              <property name="title">
               <string>Caching</string>
              </property>
              <layout class="QGridLayout" name="gridLayout_4">
-              <item row="0" column="0" colspan="5">
+              <item row="0" column="0" colspan="6">
                <widget class="QCheckBox" name="device_booklist_caching_cb">
                 <property name="text">
                  <string>Enable booklist caching on device</string>
@@ -193,6 +193,19 @@ p, li { white-space: pre-wrap; }
                  <set>Qt::AlignLeading|Qt::AlignLeft|Qt::AlignVCenter</set>
                 </property>
                </widget>
+              </item>
+              <item row="1" column="7">
+               <spacer name="horizontalSpacer_right">
+                <property name="orientation">
+                 <enum>Qt::Horizontal</enum>
+                </property>
+                <property name="sizeHint" stdset="0">
+                 <size>
+                  <width>40</width>
+                  <height>20</height>
+                 </size>
+                </property>
+               </spacer>
               </item>
               <item row="1" column="3">
                <widget class="QSpinBox" name="device_booklist_cache_limit_sb">
@@ -216,25 +229,22 @@ p, li { white-space: pre-wrap; }
                 </property>
                </widget>
               </item>
-              <item row="1" column="4">
+              <item row="1" column="5">
                <widget class="QLabel" name="label_3">
                 <property name="text">
-                 <string>of available space</string>
+                 <string>of available storage</string>
                 </property>
                </widget>
               </item>
-              <item row="1" column="5">
-               <spacer name="horizontalSpacer_right">
-                <property name="orientation">
-                 <enum>Qt::Horizontal</enum>
+              <item row="1" column="4">
+               <widget class="QLabel" name="allocated_space_label">
+                <property name="toolTip">
+                 <string>Storage space allocated for cache</string>
                 </property>
-                <property name="sizeHint" stdset="0">
-                 <size>
-                  <width>40</width>
-                  <height>20</height>
-                 </size>
+                <property name="text">
+                 <string>(space)</string>
                 </property>
-               </spacer>
+               </widget>
               </item>
              </layout>
             </widget>

@@ -134,7 +134,6 @@ if True:
         else:
             self._log("existing thumb cache at '%s'" % self.archive_path)
 
-
         # ~~~~~~~~~ Create a device signal class for Marvin Manager ~~~~~~~~~
         self.marvin_device_signals = ReaderAppSignals()
 
@@ -634,9 +633,10 @@ if True:
         #self._log_location("returning %s from can_handle()" % repr(result))
         return result
 
-    def delete_books(self, paths, end_session=True):
+    def delete_books(self, paths, end_session=True, completed=True):
         '''
         Delete books at paths on device.
+        completed added for _remove_existing_copy() to keep progress bar sane
         '''
         self._log_location(paths)
 
@@ -674,7 +674,7 @@ if True:
         self._stage_command_file(command_name, command_soup, show_command=self.prefs.get('development_mode', False))
 
         # Wait for completion
-        self._wait_for_command_completion(command_name)
+        self._wait_for_command_completion(command_name, command_complete=completed)
 
         # Update local copy of mainDb
         self._localize_database_path(self.books_subpath)
@@ -958,6 +958,7 @@ if True:
 
     def startup(self):
         self._log_location()
+        self._dump_installed_plugins()
         self._log("Waiting for calibre connector...")
 
     def sync_booklists(self, booklists, end_session=True):
@@ -1264,10 +1265,255 @@ if True:
         (width, height, cover_data as jpeg).
 
         Progress is reported in two phases:
-            1) Transfer of files to Marvin's staging area
-            2) Marvin's completion of imports
+            1) Transfer of files to Marvin's staging area (0-50%)
+            2) Marvin's completion of imports (50 - 100%)
         '''
+
+        def _upload_subset(start, count, completed=False):
+            '''
+            Process a subset of books from index to count
+            '''
+            # Init the upload_books command file
+            # <command>, <timestamp>, <overwrite existing>
+            command_element = "uploadbooks"
+            upload_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+                command_element, time.mktime(time.localtime())))
+            root = upload_soup.find(command_element)
+            root['overwrite'] = 'yes' if self.prefs.get('marvin_replace_rb', False) else 'no'
+
+            # Init the update_metadata command file
+            command_element = "updatemetadata"
+            update_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
+                command_element, time.mktime(time.localtime())))
+            root = update_soup.find(command_element)
+            root['cleanupcollections'] = 'yes'
+
+            # Process the selected files
+            metadata_updates = []
+
+            replaced_covers = 0
+            for index, fpath in enumerate(files[start:start + count], start=start):
+                if self.prefs.get('development_mode', False):
+                    self._log("*** processing {0} of {1}: {2}".format(
+                        index + 1, len(files), metadata[index].title))
+
+                # Selective processing flag
+                metadata_only = False
+
+                # Test if target_epub exists
+                target_epub = self.path_template.format(metadata[index].uuid)
+                target_epub_exists = False
+                if target_epub in self.cached_books:
+                    # Test for UUID match
+                    target_epub_exists = True
+                    self._log("'%s' already exists in Marvin (UUID match)" % metadata[index].title)
+                else:
+                    # Test for author/title match
+                    for book in self.cached_books:
+                        if 'download_pending' in self.cached_books[book]:
+                            continue
+                        if (self.cached_books[book]['title'] == metadata[index].title
+                            and self.cached_books[book]['authors'] == metadata[index].authors):
+                            self._log("'%s' already exists in Marvin (author match)" % metadata[index].title)
+                            target_epub = book
+                            target_epub_exists = True
+                            break
+                    else:
+                        self._log("'%s' by %s does not exist in Marvin" % (metadata[index].title, metadata[index].authors))
+
+                if target_epub_exists:
+                    if self.prefs.get('marvin_protect_rb', True):
+                        '''
+                        self._log("fpath: %s" % fpath)
+                        with open(fpath, 'rb') as f:
+                            stream = cStringIO.StringIO(f.read())
+                        mi = get_metadata(stream, extract_cover=False)
+                        self._log(mi)
+                        '''
+                        #self._log(self.cached_books.keys())
+                        self._log("'%s' exists on device, skipping (overwrites disabled)" % target_epub)
+                        self.skipped_books.append({'title': metadata[index].title,
+                                                   'authors': metadata[index].authors,
+                                                   'uuid': metadata[index].uuid})
+                        continue
+                    elif self.prefs.get('marvin_update_rb', False):
+                        # Save active flags for this book
+                        active_flags = []
+                        for flag in self.flags.values():
+                            if flag in self.cached_books[target_epub]['device_collections']:
+                                active_flags.append(flag)
+                        self.active_flags[metadata[index].uuid] = active_flags
+
+                        # Schedule metadata update
+                        metadata_updates.append({'title': metadata[index].title,
+                            'authors': metadata[index].authors, 'uuid': metadata[index].uuid})
+                        self._schedule_metadata_update(target_epub, metadata[index], update_soup)
+                        self.update_list.append(self.cached_books[target_epub])
+                        metadata_only = True
+
+                # Normal upload begins here
+                # Update the book at fpath with metadata xform
+                try:
+                    mi_x = self._update_epub_metadata(fpath, metadata[index])
+                except:
+                    self.malformed_books.append({'title': metadata[index].title,
+                                                 'authors': metadata[index].authors,
+                                                 'uuid': metadata[index].uuid})
+                    self._log("error updating epub metadata for '%s'" % metadata[index].title)
+                    import traceback
+                    self._log(traceback.format_exc())
+                    continue
+
+                # Generate thumb for calibre Device view
+                thumb = self._cover_to_thumb(mi_x)
+
+                if not metadata_only:
+                    # If this book on device, remove and add to update_list
+                    path = self.path_template.format(metadata[index].uuid)
+                    self._remove_existing_copy(path, metadata[index])
+
+                # Populate Book object for new_booklist
+                this_book = self._create_new_book(fpath, metadata[index], mi_x, thumb, metadata_only)
+
+                if not metadata_only:
+                    # Create <book> for manifest with filename=, coverhash=
+                    # Optional attributes locked=, wordcount=
+                    book_tag = Tag(upload_soup, 'book')
+                    book_tag['filename'] = this_book.path
+                    book_tag['coverhash'] = this_book.cover_hash
+                    if this_book.locked:
+                        book_tag['locked'] = 'true'
+                    if this_book.word_count:
+                        book_tag['wordcount'] = this_book.word_count
+
+                    # Add <collections> to <book>
+                    if this_book.device_collections:
+                        collections_tag = Tag(upload_soup, 'collections')
+                        for tag in this_book.device_collections:
+                            c_tag = Tag(upload_soup, 'collection')
+                            c_tag.insert(0, tag)
+                            collections_tag.insert(0, c_tag)
+                        book_tag.insert(0, collections_tag)
+
+                    # Detect unreplaceable covers, send <cover> if necessary
+                    replaceable_cover = self._evaluate_replaceable_cover(fpath)
+                    if not replaceable_cover:
+                        #original_cover = self._evaluate_original_cover(metadata[i])
+                        #if not original_cover:
+                        if True:
+                            cover_tag = self._create_cover_element(metadata[index], upload_soup)
+                            if cover_tag:
+                                self._log("sending replacement cover for %s" % metadata[index].title)
+                                replaced_covers += 1
+                                book_tag.insert(0, cover_tag)
+                                del book_tag['coverhash']
+                    else:
+                        # Make sure we have a cover.jpg
+                        if not metadata[index].has_cover:
+                            del book_tag['coverhash']
+
+                    upload_soup.manifest.append(book_tag)
+
+                new_booklist.append(this_book)
+
+                if not metadata_only:
+                    # Copy the book file to the staging folder
+                    destination = '/'.join([self.staging_folder, book_tag['filename']])
+                    self.ios.copy_to_idevice(str(fpath), str(destination))
+                    if target_epub_exists:
+                        self.replaced_books.append({'title': metadata[index].title,
+                                                    'authors': metadata[index].authors,
+                                                    'uuid': metadata[index].uuid})
+
+                # Add new book to cached_books
+                self.cached_books[this_book.path] = {
+                        'author': this_book.author,
+                        'authors': this_book.authors,
+                        'author_sort': this_book.author_sort,
+                        'cover_hash': this_book.cover_hash,
+                        'description': this_book.description,
+                        'device_collections': this_book.device_collections,
+                        'pubdate': this_book.pubdate,
+                        'publisher': this_book.publisher,
+                        'series': this_book.series,
+                        'series_index': this_book.series_index,
+                        'tags': this_book.tags,
+                        'title': this_book.title,
+                        'title_sort': this_book.title_sort,
+                        'uuid': this_book.uuid,
+                        }
+
+                if not target_epub_exists:
+                    self.cached_books[this_book.path]['download_pending'] = True
+
+                if self.prefs.get('development_mode', False):
+                    self._log("self.cached_books:")
+                    for p,v in self.cached_books.iteritems():
+                        self._log(" {0} {1}".format(p, repr(v['title'])))
+
+                # Report progress
+                if self.report_progress is not None:
+                    self.report_progress(self.current_step / self.upload_steps,
+                        '%(num)d of %(tot)d staged' % dict(num=index + 1, tot=file_count))
+                self.current_step += 1
+
+            manifest_count = len(upload_soup.manifest.findAll(True))
+            if manifest_count:
+                # Report replaced_covers
+                if replaced_covers:
+                    self._log("Sending {0} replacement {1}".format(replaced_covers,
+                        'cover' if replaced_covers == 1 else 'covers'))
+
+                # Copy the command file to the staging folder
+                self._log("*** staging command file for {0} books".format(count))
+                self._stage_command_file("upload_books", upload_soup,
+                    show_command=self.prefs.get('development_mode', False))
+
+                # Wait for completion
+                self._wait_for_command_completion("upload_books", command_complete=completed)
+                if self.report_progress is not None:
+                    uploaded_books = len(upload_soup.manifest.findAll('book'))
+                    self.report_progress(self.current_step / self.upload_steps,
+                        "{0} {1} added to Marvin".format(uploaded_books, "book" if uploaded_books == 1 else "books"))
+                self.current_step += 1
+
+            # Perform metadata updates
+            if metadata_updates:
+                self.upload_steps += 1
+                self._log("Sending metadata updates")
+
+                # Copy the command file to the staging folder
+                self._stage_command_file("update_metadata", update_soup,
+                    show_command=self.prefs.get('development_mode', False))
+
+                # Wait for completion
+                self._wait_for_command_completion("update_metadata", command_complete=completed)
+
+                if self.report_progress is not None:
+                    self.report_progress(self.current_step / self.upload_steps,
+                        "{} metadata updates sent to Marvin".format(len(metadata_updates)))
+                self.current_step += 1
+
+                # Add this batch to aggregate
+                self.metadata_updates += metadata_updates
+
+            # Remove download_pending flags
+            for v in self.cached_books.itervalues():
+                if 'download_pending' in v:
+                    del v['download_pending']
+            ''' ~~~ end of _upload_subset() ~~~ '''
+
         self._log_location()
+        books_remaining = len(names)
+        file_count = float(len(files))
+        BATCH_SIZE = self.prefs.get('upload_batch_size', 100)
+        ans = divmod(len(files), BATCH_SIZE)
+        self.upload_steps = (file_count * 2) + ans[0] + bool(ans[1])
+        self.current_step = 1
+        if self.prefs.get('development_mode', False):
+            self._log("*** Number of books to upload: {}".format(int(file_count)))
+            self._log("*** BATCH_SIZE: {}".format(BATCH_SIZE))
+            self._log("*** upload_steps: {}".format(self.upload_steps))
 
         # Empty booklist.db - reconstructed in _snapshot_booklist()
         booklist_conn = sqlite3.connect(str(self.local_booklist_db_path))
@@ -1275,224 +1521,30 @@ if True:
             booklist_conn.execute('''DELETE FROM "booklist"''')
             booklist_conn.execute('''VACUUM''')
 
-        # Init the upload_books command file
-        # <command>, <timestamp>, <overwrite existing>
-        command_element = "uploadbooks"
-        upload_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
-            command_element, time.mktime(time.localtime())))
-        root = upload_soup.find(command_element)
-        root['overwrite'] = 'yes' if self.prefs.get('marvin_replace_rb', False) else 'no'
-
-        # Init the update_metadata command file
-        command_element = "updatemetadata"
-        update_soup = BeautifulStoneSoup(self.COMMAND_XML.format(
-            command_element, time.mktime(time.localtime())))
-        root = update_soup.find(command_element)
-        root['cleanupcollections'] = 'yes'
-
-        # Process the selected files
-        file_count = float(len(files))
-        new_booklist = []
         self.active_flags = {}
         self.malformed_books = []
         self.metadata_updates = []
+        self.skipped_books = []
         self.rejected_books = []
         self.replaced_books = []
-        self.skipped_books = []
         self.update_list = []
         self.user_feedback_after_callback = None
+        new_booklist = []
 
-        replaced_covers = 0
-        for (i, fpath) in enumerate(files):
-
-            # Selective processing flag
-            metadata_only = False
-
-            # Test if target_epub exists
-            target_epub = self.path_template.format(metadata[i].uuid)
-            target_epub_exists = False
-            if target_epub in self.cached_books:
-                # Test for UUID match
-                target_epub_exists = True
-                self._log("'%s' already exists in Marvin (UUID match)" % metadata[i].title)
-            else:
-                # Test for author/title match
-                for book in self.cached_books:
-                    if 'download_pending' in self.cached_books[book]:
-                        continue
-                    if (self.cached_books[book]['title'] == metadata[i].title
-                        and self.cached_books[book]['authors'] == metadata[i].authors):
-                        self._log("'%s' already exists in Marvin (author match)" % metadata[i].title)
-                        target_epub = book
-                        target_epub_exists = True
-                        break
-                else:
-                    self._log("'%s' by %s does not exist in Marvin" % (metadata[i].title, metadata[i].authors))
-
-            if target_epub_exists:
-                if self.prefs.get('marvin_protect_rb', True):
-                    '''
-                    self._log("fpath: %s" % fpath)
-                    with open(fpath, 'rb') as f:
-                        stream = cStringIO.StringIO(f.read())
-                    mi = get_metadata(stream, extract_cover=False)
-                    self._log(mi)
-                    '''
-                    #self._log(self.cached_books.keys())
-                    self._log("'%s' exists on device, skipping (overwrites disabled)" % target_epub)
-                    self.skipped_books.append({'title': metadata[i].title,
-                                               'authors': metadata[i].authors,
-                                               'uuid': metadata[i].uuid})
-                    continue
-                elif self.prefs.get('marvin_update_rb', False):
-                    # Save active flags for this book
-                    active_flags = []
-                    for flag in self.flags.values():
-                        if flag in self.cached_books[target_epub]['device_collections']:
-                            active_flags.append(flag)
-                    self.active_flags[metadata[i].uuid] = active_flags
-
-                    # Schedule metadata update
-                    self.metadata_updates.append({'title': metadata[i].title,
-                        'authors': metadata[i].authors, 'uuid': metadata[i].uuid})
-                    self._schedule_metadata_update(target_epub, metadata[i], update_soup)
-                    self.update_list.append(self.cached_books[target_epub])
-                    metadata_only = True
-
-            # Normal upload begins here
-            # Update the book at fpath with metadata xform
-            try:
-                mi_x = self._update_epub_metadata(fpath, metadata[i])
-            except:
-                self.malformed_books.append({'title': metadata[i].title,
-                                             'authors': metadata[i].authors,
-                                             'uuid': metadata[i].uuid})
-                self._log("error updating epub metadata for '%s'" % metadata[i].title)
-                import traceback
-                self._log(traceback.format_exc())
-                continue
-
-            # Generate thumb for calibre Device view
-            thumb = self._cover_to_thumb(mi_x)
-
-            if not metadata_only:
-                # If this book on device, remove and add to update_list
-                path = self.path_template.format(metadata[i].uuid)
-                self._remove_existing_copy(path, metadata[i])
-
-            # Populate Book object for new_booklist
-            this_book = self._create_new_book(fpath, metadata[i], mi_x, thumb, metadata_only)
-
-            if not metadata_only:
-                # Create <book> for manifest with filename=, coverhash=
-                # Optional attributes locked=, wordcount=
-                book_tag = Tag(upload_soup, 'book')
-                book_tag['filename'] = this_book.path
-                book_tag['coverhash'] = this_book.cover_hash
-                if this_book.locked:
-                    book_tag['locked'] = 'true'
-                if this_book.word_count:
-                    book_tag['wordcount'] = this_book.word_count
-
-                # Add <collections> to <book>
-                if this_book.device_collections:
-                    collections_tag = Tag(upload_soup, 'collections')
-                    for tag in this_book.device_collections:
-                        c_tag = Tag(upload_soup, 'collection')
-                        c_tag.insert(0, tag)
-                        collections_tag.insert(0, c_tag)
-                    book_tag.insert(0, collections_tag)
-
-                # Detect unreplaceable covers, send <cover> if necessary
-                replaceable_cover = self._evaluate_replaceable_cover(fpath)
-                if not replaceable_cover:
-                    #original_cover = self._evaluate_original_cover(metadata[i])
-                    #if not original_cover:
-                    if True:
-                        cover_tag = self._create_cover_element(metadata[i], upload_soup)
-                        if cover_tag:
-                            self._log("sending replacement cover for %s" % metadata[i].title)
-                            replaced_covers += 1
-                            book_tag.insert(0, cover_tag)
-                            del book_tag['coverhash']
-                else:
-                    # Make sure we have a cover.jpg
-                    if not metadata[i].has_cover:
-                        del book_tag['coverhash']
-
-                upload_soup.manifest.insert(i, book_tag)
-
-            new_booklist.append(this_book)
-
-            if not metadata_only:
-                # Copy the book file to the staging folder
-                destination = '/'.join([self.staging_folder, book_tag['filename']])
-                self.ios.copy_to_idevice(str(fpath), str(destination))
-                if target_epub_exists:
-                    self.replaced_books.append({'title': metadata[i].title,
-                                                'authors': metadata[i].authors,
-                                                'uuid': metadata[i].uuid})
-
-            # Add new book to cached_books
-            self.cached_books[this_book.path] = {
-                    'author': this_book.author,
-                    'authors': this_book.authors,
-                    'author_sort': this_book.author_sort,
-                    'cover_hash': this_book.cover_hash,
-                    'description': this_book.description,
-                    'device_collections': this_book.device_collections,
-                    'pubdate': this_book.pubdate,
-                    'publisher': this_book.publisher,
-                    'series': this_book.series,
-                    'series_index': this_book.series_index,
-                    'tags': this_book.tags,
-                    'title': this_book.title,
-                    'title_sort': this_book.title_sort,
-                    'uuid': this_book.uuid,
-                    }
-
-            if not target_epub_exists:
-                self.cached_books[this_book.path]['download_pending'] = True
-
+        index = 0
+        while books_remaining > BATCH_SIZE:
             if self.prefs.get('development_mode', False):
-                self._log("self.cached_books:")
-                for p,v in self.cached_books.iteritems():
-                    self._log(" {0} {1}".format(p, repr(v['title'])))
+                self._log("*** processing books {0} to {1} of {2}".format(
+                    index + 1, index + BATCH_SIZE, int(file_count)))
+            _upload_subset(index, BATCH_SIZE, completed=False)
+            index += BATCH_SIZE
+            books_remaining -= BATCH_SIZE
 
-            # Report progress
-            if self.report_progress is not None:
-                self.report_progress((i + 1) / (file_count * 2),
-                    '%(num)d of %(tot)d transferred to Marvin' % dict(num=i + 1, tot=file_count))
-
-        manifest_count = len(upload_soup.manifest.findAll(True))
-        if manifest_count:
-            # Report replaced_covers
-            if replaced_covers:
-                self._log("Sending {0} replacement {1}".format(replaced_covers,
-                    'cover' if replaced_covers == 1 else 'covers'))
-
-            # Copy the command file to the staging folder
-            self._stage_command_file("upload_books", upload_soup,
-                show_command=self.prefs.get('development_mode', False))
-
-            # Wait for completion
-            self._wait_for_command_completion("upload_books")
-
-        # Perform metadata updates
-        if self.metadata_updates:
-            self._log("Sending metadata updates")
-
-            # Copy the command file to the staging folder
-            self._stage_command_file("update_metadata", update_soup,
-                show_command=self.prefs.get('development_mode', False))
-
-            # Wait for completion
-            self._wait_for_command_completion("update_metadata")
-
-        # Remove download_pending flags
-        for v in self.cached_books.itervalues():
-            if 'download_pending' in v:
-                del v['download_pending']
+        # Do the final group
+        if self.prefs.get('development_mode', False):
+            self._log("*** processing index {0} to {1} of {2}".format(
+                index + 1, index + books_remaining, int(file_count)))
+        _upload_subset(index, books_remaining, completed=True)
 
         # Update local copy of mainDb
         self._localize_database_path(self.books_subpath)
@@ -2109,14 +2161,14 @@ if True:
                             self._log("actual path: %s" % repr(path))
                             self.update_list.append(self.cached_books[path])
                             pop_list.append(book)
-                            self.delete_books([path])
+                            self.delete_books([path], completed=False)
                             break
                     else:
                         self._log("ERROR: Unable to remove %s from self.cached_books" % repr(metadata.title))
 
                 else:
                     self.update_list.append(self.cached_books[book])
-                    self.delete_books([path])
+                    self.delete_books([path], completed=False)
                     break
 
         # Remove any books whose path changed
@@ -2137,8 +2189,8 @@ if True:
                        len(self.rejected_books))
         details = ''
         if total_added:
-            details = "{0} {1} successfully added to Marvin.\n\n".format(total_added,
-                                                          'books' if total_added > 1 else 'book')
+            details = "{0:,} {1} successfully added to Marvin.\n\n".format(
+                total_added, 'books' if total_added > 1 else 'book')
 
         if self.malformed_books or self.rejected_books:
             msg = ("Warnings reported while sending to Marvin.\n" +
@@ -2165,25 +2217,25 @@ if True:
                 for book in self.skipped_books:
                     details += u" - '{0}' by {1}\n".format(book['title'],
                                                        ', '.join(book['authors']))
-                details += "\nUpdate behavior may be changed in the plugin's Marvin Options settings."
+                details += "\nUpdate behavior may be changed in the Marvin options section of the Device configuration dialog."
             elif self.replaced_books:
                 details += u"\nThe following {0} replaced in Marvin:\n".format(
                             'books were' if len(self.replaced_books) > 1 else 'book was')
                 for book in self.replaced_books:
                     details += u" + '{0}' by {1}\n".format(book['title'],
                                                        ', '.join(book['authors']))
-                details += "\nReplacement behavior may be changed in the plugin's Marvin Options settings."
+                details += "\nReplacement behavior may be changed in the Marvin options section of the Device configuration dialog."
             elif self.metadata_updates:
                 details += u"\nMetadata was updated for the following {0}:\n".format(
                             'books' if len(self.metadata_updates) > 1 else 'book')
                 for book in self.metadata_updates:
                     details += u" + '{0}' by {1}\n".format(book['title'],
                                                            ', '.join(book['authors']))
-                details += "\nUpdate behavior may be changed in the plugin's Marvin Options settings."
+                details += "\nUpdate behavior may be changed in the Marvin options section of the Device configuration dialog."
 
         # If we skipped any books during upload_books due to overwrite switch, inform user
         elif self.skipped_books:
-            msg = ("Replacement of existing books is disabled in the plugin's Marvin Options settings.\n"
+            msg = ("Replacement of existing books is disabled in the Marvin options section of the Device configuration dialog.\n"
                    "Click 'Show details' for a summary.\n")
 
             details += u"The following {0} already installed in Marvin:\n".format(
@@ -2191,11 +2243,11 @@ if True:
             for book in self.skipped_books:
                 details += u" - '{0}' by {1}\n".format(book['title'],
                                                        ', '.join(book['authors']))
-            details += "\nOverwrite behavior may be changed in the plugin's Marvin Options settings."
+            details += "\nOverwrite behavior may be changed in the Marvin options section of the Device configuration dialog."
 
         # If we replaced any books, inform user
         elif self.replaced_books:
-            msg = ("{0} {1} replaced in Marvin.\n".format(len(self.replaced_books),
+            msg = ("{0:,} {1} replaced in Marvin.\n".format(len(self.replaced_books),
                             'books were' if len(self.replaced_books) > 1 else 'book was') +
                             "Click 'Show details' for a summary.\n")
 
@@ -2204,11 +2256,11 @@ if True:
             for book in self.replaced_books:
                 details += u" + '{0}' by {1}\n".format(book['title'],
                                                        ', '.join(book['authors']))
-            details += "\nReplacement behavior may be changed in the plugin's Marvin Options settings."
+            details += "\nReplacement behavior may be changed in the Marvin options section of the Device configuration dialog."
 
         # If we updated metadata, inform user
         elif self.metadata_updates:
-            msg = ("Updated metadata for {0} {1}.\n".format(len(self.metadata_updates),
+            msg = ("Updated metadata for {0:,} {1}.\n".format(len(self.metadata_updates),
                                                            'books' if len(self.metadata_updates) > 1 else 'book') +
                   "Click 'Show details' for a summary.\n")
 
@@ -2217,7 +2269,7 @@ if True:
             for book in self.metadata_updates:
                 details += u" + '{0}' by {1}\n".format(book['title'],
                                                    ', '.join(book['authors']))
-            details += "\nUpdate behavior may be changed in the plugin's Marvin Options settings."
+            details += "\nUpdate behavior may be changed in the Marvin options section of the Device configuration dialog."
 
         self.user_feedback_after_callback = {
               'title': title,
@@ -2618,7 +2670,12 @@ if True:
 
         tmp = b'/'.join([self.staging_folder, b'%s.tmp' % command_name])
         final = b'/'.join([self.staging_folder, b'%s.xml' % command_name])
-        self.ios.write(command_soup.renderContents(), tmp)
+
+        with TemporaryFile() as src:
+            with open(src, 'w') as f:
+                f.write(command_soup.renderContents())
+            self.ios.copy_to_idevice(f.name, tmp)
+
         self.ios.rename(tmp, final)
 
     def _update_epub_metadata(self, fpath, metadata):
@@ -2715,7 +2772,7 @@ if True:
                             ))
         return ans
 
-    def _wait_for_command_completion(self, command_name, send_signal=True):
+    def _wait_for_command_completion(self, command_name, send_signal=True, command_complete=True):
         '''
         Wait for Marvin to issue progress reports via status.xml
         Marvin creates status.xml upon receiving command, increments <progress>
@@ -2781,7 +2838,7 @@ if True:
                                                  "%3.0f" % (progress * 100)))
 
                             # Report progress
-                            if self.report_progress is not None:
+                            if command_complete and self.report_progress is not None:
                                 self.report_progress(0.5 + progress/2, '')
 
                             # Reset watchdog timer
@@ -2838,12 +2895,12 @@ if True:
                            command_name))
                 break
 
-        if self.report_progress is not None:
-            self.report_progress(1.0, _('finished'))
-
-        # Emit a signal for Marvin Manager
-        if send_signal:
-            self.marvin_device_signals.reader_app_status_changed.emit({'cmd':command_name})
+        if command_complete:
+            if self.report_progress is not None:
+                self.report_progress(1.0, _('finished'))
+            if send_signal:
+                # Emit a signal for Marvin Manager
+                self.marvin_device_signals.reader_app_status_changed.emit({'cmd':command_name})
 
     def _watchdog_timed_out(self):
         '''

@@ -335,5 +335,48 @@ To see diagnostic messages, run calibre in debug mode:
     calibre-debug -g
 
 ---
+###JSON switches###
+The plugin’s prefs file is a JSON file, stored in the plugins folder of calibre’s configuration directory.
 
-Last update June 19, 2013 9:00:00 AM MDT
+Individual switches may be set from a terminal window:
+
+    calibre-debug -c "from calibre.utils.config import JSONConfig; JSONConfig('plugins/iOS reader applications').set('{switch}', {value})"
+
+where ```{switch}``` is from the table below, and ```{value}``` is the new value.
+
+For example:
+
+    calibre-debug -c "from calibre.utils.config import JSONConfig; JSONConfig('plugins/iOS reader applications').set('development_mode', True)"
+
+---
+
+    calibre-debug -c "from calibre.utils.config import JSONConfig; JSONConfig('plugins/iOS reader applications').set('upload_batch_size', 50)"
+
+<table>
+    <thead>
+        <tr><th>switch</th><th>description</th></tr>
+    </thead>
+    <tbody>
+        <tr><td>booklist_caching</td><td>Enables overall booklist caching in Marvin</td></tr>
+        <tr><td>cc_mappings</td><td>Per-library custom column settings</td></tr>
+        <tr><td>debug_can_handle</td><td>Enables additional diagnostic output in can_handle()</td></tr>
+        <tr><td>debug_libimobiledevice</td><td>Enables diagnostic output for libiMobiledevice library</td></tr>
+        <tr><td>debug_plugin</td><td>Enables diagnostic output when running calibre in debug mode</td></tr>
+        <tr><td>development_mode</td><td>Enables additional diagnostic detail in debug mode</td></tr>
+        <tr><td>development_app_id</td><td>See 'Developing a new driver'</td></tr>
+        <tr><td>development_overlay</td><td>See 'Developing a new driver'</td></tr>
+        <tr><td>device_booklist_cache_limit</td><td>Factor used (as a percent) to limit amount of space used by device caches</td></tr>
+        <tr><td>device_booklist_caching</td><td>Enables booklist caching to device</td></tr>
+        <tr><td>goodreader_caching_disabled</td><td>Development switch</td></tr>
+        <tr><td>ibooks_override</td><td>Allows plugin to connect to iBooks under OS X 10.9+</td></tr>
+        <tr><td>kindle_caching_disabled</td><td>Development switch</td></tr>
+        <tr><td>kindle_enabled_formats</td><td>List of formats supported by Kindle for iOS reader application</td></tr>
+        <tr><td>plugin_diagnostics</td><td>Enables metrics logging</td></tr>
+        <tr><td>plugin_version</td><td>Plugin version when initially installed or schema upgraded</td></tr>
+        <tr><td>preferred_reader_app</td><td>User-selected iOS reader application</td></tr>
+        <tr><td>upload_batch_size</td><td>Maximum number of books sent to Marvin in one upload command</td></tr>
+    </tbody>
+</table>
+
+---
+Last update 2014-05-05 4:24:00 AM MDT
