@@ -424,8 +424,9 @@ if True:
                 self.report_progress(1.0, 'finished')
 
             self.cached_books = cached_books
+            self.load_time = time.time() - start_time
             metrics = {'book_count': len(booklist),
-                       'load_time': time.time() - start_time}
+                       'load_time': self.load_time}
             self._log_metrics(metrics=metrics)
 
             if self.prefs.get('development_mode', False):

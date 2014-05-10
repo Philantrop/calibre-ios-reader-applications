@@ -54,17 +54,19 @@ else:
 
 plugin_prefs = JSONConfig('plugins/iOS reader applications')
 
+# #mark ~~~ READER_APP_ALIASES ~~~
 # List of app names as installed by iOS. Prefix with 'b' for libiMobileDevice.
 # These are the names that appear in the Config dialog for Preferred reader application
 # 'iBooks' is removed under linux
 # If an app is available in separate versions for iPad/iPhone, list iPad version first
 READER_APP_ALIASES = {
-                      'GoodReader': [b'com.goodiware.GoodReaderIPad', b'com.goodiware.GoodReader'],
-                      'iBooks':     [b'com.apple.iBooks'],
-                      'Kindle':     [b'com.amazon.Lassen'],
-                      'Marvin':     [b'com.appstafarian.MarvinIP',
-                                     b'com.appstafarian.MarvinIP-free',
-                                     b'com.appstafarian.Marvin']
+                      'GoodReader':  [b'com.goodiware.GoodReaderIPad', b'com.goodiware.GoodReader'],
+                      'GoodReader4': [b'com.goodiware.goodreader4'],
+                      'iBooks':      [b'com.apple.iBooks'],
+                      'Kindle':      [b'com.amazon.Lassen'],
+                      'Marvin':      [b'com.appstafarian.MarvinIP',
+                                      b'com.appstafarian.MarvinIP-free',
+                                      b'com.appstafarian.Marvin']
                      }
 
 # Default format maps for Kindle options panel
@@ -1252,6 +1254,9 @@ class iOSReaderApp(DriverBase, Logger):
             self._log("loading development_overlay %s" % repr(do))
             overlay = imp.load_source("temporary_overlay_methods", do)
         else:
+            # Special-case GoodReader4 to use the same overlay as GoodReader
+            if cls_name == "GoodReader4":
+                cls_name = "GoodReader"
             overlay_source = 'readers/%s_overlays.py' % cls_name
             basename = re.sub('readers/', '', overlay_source)
             tmp_file = os.path.join(self.temp_dir, basename)
