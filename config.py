@@ -457,22 +457,26 @@ class ConfigWidget(QWidget, Ui_Dialog):
             return TEMPLATE.format(**args)
 
         def _format_installed_plugins_info():
+
             args = {'subtitle': " Installed plugins ",
                     'separator_width': separator_width,
                     }
-            for plugin in device_profile['user_installed_plugins']:
-                args[plugin] = "{{{0}}}".format(plugin)
+            ans = '\n{subtitle:-^{separator_width}}\n'.format(**args)
 
-            TEMPLATE = '\n{subtitle:-^{separator_width}}\n'
-            max_name_width = max([len(v) for v in device_profile['user_installed_plugins'].keys()])
-            max_author_width = max([len(d['author']) for d in device_profile['user_installed_plugins'].values()])
-            max_version_width = max([len(d['version']) for d in device_profile['user_installed_plugins'].values()])
-            for plugin, d in sorted(device_profile['user_installed_plugins'].iteritems(), key=lambda item: item[0].lower()):
-                TEMPLATE += " {0:{1}} {2:{3}}\n".format(
-                    plugin, max_name_width + 1,
-                    d['version'], max_version_width + 1)
+            if device_profile['user_installed_plugins']:
+                for plugin in device_profile['user_installed_plugins']:
+                    args[plugin] = "{{{0}}}".format(plugin)
+                max_name_width = max([len(v) for v in device_profile['user_installed_plugins'].keys()])
+                max_author_width = max([len(d['author']) for d in device_profile['user_installed_plugins'].values()])
+                max_version_width = max([len(d['version']) for d in device_profile['user_installed_plugins'].values()])
+                TEMPLATE = ''
+                for plugin, d in sorted(device_profile['user_installed_plugins'].iteritems(), key=lambda item: item[0].lower()):
+                    TEMPLATE += " {0:{1}} {2:{3}}\n".format(
+                        plugin, max_name_width + 1,
+                        d['version'], max_version_width + 1)
+                ans += TEMPLATE.format(**args)
 
-            return TEMPLATE.format(**args)
+            return ans
 
         def _format_prefs_info():
             args = {'subtitle': " Prefs ",
