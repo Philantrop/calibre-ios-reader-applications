@@ -9,6 +9,7 @@ from datetime import datetime
 
 from calibre.constants import islinux, isosx, iswindows
 from calibre.devices.usbms.books import BookList
+from calibre.ebooks.metadata import authors_to_string
 from calibre.utils.zipfile import ZipFile
 
 from calibre_plugins.ios_reader_apps import Book, iOSReaderApp
@@ -43,6 +44,7 @@ if True:
 
         # ~~~~~~~~~ Variables ~~~~~~~~~
         self.busy = False
+        self.DEBUG_CAN_HANDLE = self.prefs.get('debug_can_handle', False)
         self.documents_folder = b'/Documents'
         self.format_map = ['pdf']
         self.ios_connection = {
@@ -257,9 +259,7 @@ if True:
 
         # ~~~ Entry point ~~~
 
-        DEBUG_CAN_HANDLE = False
-
-        if DEBUG_CAN_HANDLE:
+        if self.DEBUG_CAN_HANDLE:
             self._log_location(_show_current_connection())
 
         # Set a flag so eject doesn't interrupt communication with iDevice
@@ -267,7 +267,7 @@ if True:
 
         # 0: If we've already discovered a connected device without GoodReader, exit
         if self.ios_connection['udid'] and self.ios_connection['app_installed'] is False:
-            if DEBUG_CAN_HANDLE:
+            if self.DEBUG_CAN_HANDLE:
                 self._log("self.ios_connection['udid']: %s" % self.ios_connection['udid'])
                 self._log("self.ios_connection['app_installed']: %s" % self.ios_connection['app_installed'])
                 self._log("0: returning %s" % self.ios_connection['app_installed'])
@@ -276,13 +276,13 @@ if True:
 
         # 0. If user ejected, exit
         if self.ios_connection['udid'] and self.ejected is True:
-            if DEBUG_CAN_HANDLE:
+            if self.DEBUG_CAN_HANDLE:
                 self._log("'%s' ejected" % self.ios_connection['device_name'])
             self.busy = False
             return False
 
         # 1: Is there a (single) connected iDevice?
-        if False and DEBUG_CAN_HANDLE:
+        if False and self.DEBUG_CAN_HANDLE:
             self._log("1. self.ios_connection: %s" % _show_current_connection())
 
         connected_ios_devices = self.ios.get_device_list()
@@ -290,69 +290,28 @@ if True:
         if len(connected_ios_devices) == 1:
             '''
             If we have an existing USB connection, determine state
-             Three possible outcomes:
-              a) connected.xml exists (<state> = 'online')
-              b) connected.xml exists (<state> = 'offline')
-              c) connected.xml does not exist (User not in connection mode)
             '''
-            """
-            if self.ios_connection['connected']:
-                connection_live = False
-                if self.ios.exists(self.connected_fs):
-                    # Parse the connection data for state
-                    connection = etree.fromstring(self.ios.read(self.connected_fs))
-                    connection_state = connection.find('state').text
-                    if connection_state == 'online':
-                        connection_live = True
-                        if DEBUG_CAN_HANDLE:
-                            self._log("1a. <state> = online")
-                    else:
-                        connection_live = False
-                        if DEBUG_CAN_HANDLE:
-                            self._log("1b. <state> = offline")
-
-                    # Show the connection initiation time
-                    self.connection_timestamp = float(connection.get('timestamp'))
-                    d = datetime.fromtimestamp(self.connection_timestamp)
-                    if DEBUG_CAN_HANDLE:
-                        self._log("   connection last refreshed %s" % (d.strftime('%Y-%m-%d %H:%M:%S')))
-
-                else:
-                    if DEBUG_CAN_HANDLE:
-                        self._log("1c. user exited connection mode")
-
-                if not connection_live:
-                    # Lost the connection, reset
-                    #self._reset_ios_connection(udid=connected_ios_devices[0])
-                    self.ios_connection['connected'] = False
-
-                if DEBUG_CAN_HANDLE:
-                    self._log("1d: returning %s" % connection_live)
-                self.busy = False
-                return connection_live
-
-            elif self.ios_connection['udid'] != connected_ios_devices[0]:
-                self._reset_ios_connection(udid=connected_ios_devices[0], verbose=DEBUG_CAN_HANDLE)
-            """
+            if self.ios_connection['udid'] != connected_ios_devices[0]:
+                self._reset_ios_connection(udid=connected_ios_devices[0])
 
             # 2. Is GoodReader installed on this iDevice?
             if not self.ios_connection['app_installed']:
-                if DEBUG_CAN_HANDLE:
+                if self.DEBUG_CAN_HANDLE:
                     self._log("2. GoodReader installed, attempting connection")
                 self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_id=self.app_id)
                 self.ios_connection['device_name'] = self.ios.device_name
-                if DEBUG_CAN_HANDLE:
+                if self.DEBUG_CAN_HANDLE:
                     self._log("2a. self.ios_connection: %s" % _show_current_connection())
 
                 # If no GoodReader, we can't handle, so exit
                 if not self.ios_connection['app_installed']:
-                    if DEBUG_CAN_HANDLE:
+                    if self.DEBUG_CAN_HANDLE:
                         self._log("2. GoodReader not installed")
                     self.busy = False
                     return self.ios_connection['app_installed']
 
             # 3. Check to see if connected.xml exists in staging folder
-            if DEBUG_CAN_HANDLE:
+            if self.DEBUG_CAN_HANDLE:
                 self._log("3. Looking for calibre connection mode")
 
             connection_live = True
@@ -371,7 +330,7 @@ if True:
             self.ios.disconnect_idevice()
 
         # 4. show connection
-        if DEBUG_CAN_HANDLE:
+        if self.DEBUG_CAN_HANDLE:
             self._log("4. self.ios_connection: %s" % _show_current_connection())
 
         self.busy = False
@@ -431,6 +390,8 @@ if True:
         while self.busy:
             time.sleep(0.10)
         self.ejected = True
+        self.ios_connection['ejected'] = True
+
 
     def get_file(self, path, outfile, end_session=True):
         '''
@@ -452,7 +413,8 @@ if True:
 
 
         # >>> Entry point
-        #self._log_location(self.ios_connection)
+        if self.DEBUG_CAN_HANDLE:
+            self._log_location(self.ios_connection)
 
         # If we were ejected, test to see if we're still physically connected
         if self.ejected:
@@ -838,6 +800,7 @@ if True:
 
         self._log_location(metadata.title)
         this_book = Book(metadata.title, ' & '.join(metadata.authors))
+        #this_book = Book(metadata.title, authors_to_string(metadata.authors))
         this_book.author_sort = metadata.author_sort
         this_book.dateadded = time.mktime(time.gmtime())
         this_book.datetime = datetime.fromtimestamp(this_book.dateadded).timetuple()
@@ -889,6 +852,8 @@ if True:
         cached_book = cur.fetchone()
         if cached_book:
             #self._log(cached_book.keys())
+            #self._log(repr(cached_book[b'authors']))
+            #self._log(authors_to_string(cached_book[b'authors'].split(' & ')))
 
             this_book = Book(cached_book[b'title'], cached_book[b'authors'])
             this_book.author_sort = cached_book[b'author_sort']
@@ -1104,7 +1069,7 @@ if True:
                               device_name=None,
                               ejected=False,
                               udid=0):
-        if self.prefs.get('development_mode', False):
+        if self.DEBUG_CAN_HANDLE:
             connection_state = ("connected:{0:1} app_installed:{1:1} device_name:{2} udid:{3}".format(
                 self.ios_connection['connected'],
                 self.ios_connection['app_installed'],

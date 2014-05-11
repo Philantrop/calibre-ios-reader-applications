@@ -166,105 +166,6 @@ class ConfigWidget(QWidget, Ui_Dialog):
         device info
         caching
         '''
-        def _add_platform_profile():
-            # Platform info
-            import platform
-            from calibre.constants import (__appname__, get_version, isportable, isosx,
-                                           isfrozen, is64bit, iswindows)
-            calibre_profile = "{0} {1}{2} isfrozen:{3} is64bit:{4}".format(
-                __appname__, get_version(),
-                ' Portable' if isportable else '', isfrozen, is64bit)
-            device_profile['CalibreProfile'] = calibre_profile
-
-            platform_profile = "{0} {1} {2}".format(
-                platform.platform(), platform.system(), platform.architecture())
-            device_profile['PlatformProfile'] = platform_profile
-
-            try:
-                if iswindows:
-                    os_profile = "Windows {0}".format(platform.win32_ver())
-                    if not is64bit:
-                        try:
-                            import win32process
-                            if win32process.IsWow64Process():
-                                os_profile += " 32bit process running on 64bit windows"
-                        except:
-                            pass
-                elif isosx:
-                    os_profile = "OS X {0}".format(platform.mac_ver()[0])
-                else:
-                    os_profile = "Linux {0}".format(platform.linux_distribution())
-            except:
-                import traceback
-                self._log(traceback.format_exc())
-                os_profile = "unknown"
-
-            device_profile['OSProfile'] = os_profile
-
-        def _add_iOSRA_version():
-            device_profile['iOSRA_version'] = "{0}.{1}.{2}".format(*self.parent.version)
-
-        def _add_prefs():
-            prefs = {'created_under': self.prefs.get('plugin_version')}
-            for pref in sorted(self.prefs.keys()):
-                if pref == 'plugin_version':
-                    continue
-                prefs[pref] = self.prefs.get(pref, None)
-            device_profile['prefs'] = prefs
-
-        def _add_installed_plugins():
-            # installed plugins
-            from calibre.customize.ui import initialized_plugins
-            user_installed_plugins = {}
-            for plugin in initialized_plugins():
-                path = getattr(plugin, 'plugin_path', None)
-                if path is not None:
-                    name = getattr(plugin, 'name', None)
-                    if name == self.parent.name:
-                        continue
-                    author = getattr(plugin, 'author', None)
-                    version = getattr(plugin, 'version', None)
-                    user_installed_plugins[name] = {'author': author, 'version': "{0}.{1}.{2}".format(*version)}
-            device_profile['user_installed_plugins'] = user_installed_plugins
-
-        def _add_device_book_count():
-            # Device book count
-            device_profile['device_book_count'] = len(self.parent.cached_books)
-
-        def _add_library_profile():
-            library_profile = {}
-            cdb = self.gui.current_db
-            library_profile['epubs'] = len(cdb.search_getting_ids('formats:EPUB', ''))
-            library_profile['pdfs'] = len(cdb.search_getting_ids('formats:PDF', ''))
-            library_profile['mobis'] = len(cdb.search_getting_ids('formats:MOBI', ''))
-
-            device_profile['library_profile'] = library_profile
-
-        def _add_load_time():
-            elapsed = _seconds_to_time(self.parent.load_time)
-            formatted = "{0:02d}:{1:02d}".format(int(elapsed['mins']), int(elapsed['secs']))
-            device_profile['load_time'] = formatted
-
-        def _add_device_info():
-            cdp = self.parent.device_profile
-            device_info = {}
-            all_fields = ['DeviceClass', 'DeviceColor', 'DeviceName', 'FSBlockSize',
-                          'FSFreeBytes', 'FSTotalBytes', 'FirmwareVersion', 'HardwareModel',
-                          'ModelNumber', 'PasswordProtected', 'ProductType', 'ProductVersion',
-                          'SerialNumber', 'TimeIntervalSince1970', 'TimeZone',
-                          'TimeZoneOffsetFromUTC', 'UniqueDeviceID']
-            superfluous = ['DeviceClass', 'DeviceColor', 'FSBlockSize', 'HardwareModel',
-                           'SerialNumber', 'TimeIntervalSince1970', 'TimeZoneOffsetFromUTC',
-                           'UniqueDeviceID', 'ModelNumber']
-            for item in sorted(cdp):
-                if item in superfluous:
-                    continue
-                if item in ['FSTotalBytes', 'FSFreeBytes']:
-                    device_info[item] = int(cdp[item])
-                else:
-                    device_info[item] = cdp[item]
-            device_profile['device_info'] = device_info
-
         def _add_available_space():
             available = self.available_space
             if available > 1024 * 1024 * 1024:
@@ -274,23 +175,6 @@ class ConfigWidget(QWidget, Ui_Dialog):
                 available = int(available / (1024 * 1024))
                 fmt_str = "{:,} MB"
             device_profile['available_space'] = fmt_str.format(available)
-
-        def _add_caching():
-            device_caching = {}
-            device_caching_enabled = self.prefs.get('device_booklist_caching')
-            allocation_factor = self.prefs.get('device_booklist_cache_limit')
-            device_caching['enabled'] = device_caching_enabled
-            device_caching['allocation_factor'] = allocation_factor
-
-            allocated_space = int(self.available_space * (allocation_factor / 100))
-            if allocated_space > 1024 * 1024 * 1024:
-                allocated_space = allocated_space / (1024 * 1024 * 1024)
-                fmt_str = "{:.2f} GB"
-            else:
-                allocated_space = int(allocated_space / (1024 * 1024))
-                fmt_str = "{:,} MB"
-            device_caching['allocated_space'] = fmt_str.format(allocated_space)
-            device_profile['device_caching'] = device_caching
 
         def _add_cache_files():
             # Cache files
@@ -355,111 +239,121 @@ class ConfigWidget(QWidget, Ui_Dialog):
 
             device_profile['cache_files'] = cache_files
 
-        def _format_system_info():
-            # System information
-            args = {'subtitle': " System ",
-                    'separator_width': separator_width,
-                    'CalibreProfile': device_profile['CalibreProfile'],
-                    'OSProfile': device_profile['OSProfile'],
-                    'library_books': "{0:,} EPUBs, {1:,} MOBIs, {2:,} PDFs".format(
-                        device_profile['library_profile']['epubs'],
-                        device_profile['library_profile']['mobis'],
-                        device_profile['library_profile']['pdfs'])
-                    }
+        def _add_caching():
+            device_caching = {}
+            device_caching_enabled = self.prefs.get('device_booklist_caching')
+            allocation_factor = self.prefs.get('device_booklist_cache_limit')
+            device_caching['enabled'] = device_caching_enabled
+            device_caching['allocation_factor'] = allocation_factor
 
-            TEMPLATE = (
-                '{subtitle:-^{separator_width}}\n'
-                ' {CalibreProfile}\n'
-                ' {OSProfile}\n'
-                ' library: {library_books}\n')
-            return TEMPLATE.format(**args)
+            allocated_space = int(self.available_space * (allocation_factor / 100))
+            if allocated_space > 1024 * 1024 * 1024:
+                allocated_space = allocated_space / (1024 * 1024 * 1024)
+                fmt_str = "{:.2f} GB"
+            else:
+                allocated_space = int(allocated_space / (1024 * 1024))
+                fmt_str = "{:,} MB"
+            device_caching['allocated_space'] = fmt_str.format(allocated_space)
+            device_profile['device_caching'] = device_caching
 
-        def _format_device_info():
-            args = {'subtitle': " iDevice ",
-                    'separator_width': separator_width,
-                    'iOSRA_version': device_profile['iOSRA_version'],
-                    'iOS_version': device_profile['device_info']['ProductVersion'],
-                    'ProductType': device_profile['device_info']['ProductType'],
-                    'FSTotalBytes': device_profile['device_info']['FSTotalBytes'],
-                    'FSFreeBytes': device_profile['device_info']['FSFreeBytes'],
-                    'PasswordProtected': device_profile['device_info']['PasswordProtected']
-                    }
-            TEMPLATE = (
-                '\n{subtitle:-^{separator_width}}\n'
-                ' iOSRA version: {iOSRA_version}\n'
-                ' iOS version: {iOS_version}\n'
-                ' model: {ProductType}\n'
-                ' FSTotalBytes: {FSTotalBytes:,}\n'
-                ' FSFreeBytes: {FSFreeBytes:,}\n'
-                ' PasswordProtected: {PasswordProtected}\n'
-                )
-            return TEMPLATE.format(**args)
+        def _add_installed_plugins():
+            # installed plugins
+            from calibre.customize.ui import initialized_plugins
+            user_installed_plugins = {}
+            for plugin in initialized_plugins():
+                path = getattr(plugin, 'plugin_path', None)
+                if path is not None:
+                    name = getattr(plugin, 'name', None)
+                    if name == self.parent.name:
+                        continue
+                    author = getattr(plugin, 'author', None)
+                    version = getattr(plugin, 'version', None)
+                    user_installed_plugins[name] = {'author': author, 'version': "{0}.{1}.{2}".format(*version)}
+            device_profile['user_installed_plugins'] = user_installed_plugins
 
-        def _format_reader_app_info():
-            args = {'subtitle': " {} ".format(device_profile['prefs']['preferred_reader_app']),
-                    'separator_width': separator_width,
-                    'device_books': device_profile['device_book_count'],
-                    'load_time': device_profile['load_time']
-                    }
-            TEMPLATE = (
-                '\n{subtitle:-^{separator_width}}\n'
-                ' device books: {device_books}\n'
-                ' init time: {load_time}\n'
-                )
-            return TEMPLATE.format(**args)
+        def _add_device_book_count():
+            # Device book count
+            device_profile['device_book_count'] = len(self.parent.cached_books)
 
-        def _format_prefs_info():
-            args = {'subtitle': " Prefs ",
-                    'separator_width': separator_width,
-                    'created_under': device_profile['prefs']['created_under'],
-                    'marvin_protect_rb': device_profile['prefs']['marvin_protect_rb'],
-                    'marvin_replace_rb': device_profile['prefs']['marvin_replace_rb'],
-                    'marvin_update_rb': device_profile['prefs']['marvin_update_rb'],
-                    }
-            TEMPLATE = (
-                '\n{subtitle:-^{separator_width}}\n'
-                ' created_under: {created_under}\n'
-                ' marvin_protect_rb: {marvin_protect_rb}\n'
-                ' marvin_replace_rb: {marvin_replace_rb}\n'
-                ' marvin_update_rb: {marvin_update_rb}\n'
-                )
-            return TEMPLATE.format(**args)
+        def _add_device_info():
+            cdp = self.parent.device_profile
+            device_info = {}
+            all_fields = ['DeviceClass', 'DeviceColor', 'DeviceName', 'FSBlockSize',
+                          'FSFreeBytes', 'FSTotalBytes', 'FirmwareVersion', 'HardwareModel',
+                          'ModelNumber', 'PasswordProtected', 'ProductType', 'ProductVersion',
+                          'SerialNumber', 'TimeIntervalSince1970', 'TimeZone',
+                          'TimeZoneOffsetFromUTC', 'UniqueDeviceID']
+            superfluous = ['DeviceClass', 'DeviceColor', 'FSBlockSize', 'HardwareModel',
+                           'SerialNumber', 'TimeIntervalSince1970', 'TimeZoneOffsetFromUTC',
+                           'UniqueDeviceID', 'ModelNumber']
+            for item in sorted(cdp):
+                if item in superfluous:
+                    continue
+                if item in ['FSTotalBytes', 'FSFreeBytes']:
+                    device_info[item] = int(cdp[item])
+                else:
+                    device_info[item] = cdp[item]
+            device_profile['device_info'] = device_info
 
-        def _format_installed_plugins_info():
-            args = {'subtitle': " Installed plugins ",
-                    'separator_width': separator_width,
-                    }
-            for plugin in device_profile['user_installed_plugins']:
-                args[plugin] = "{%s}" % plugin
+        def _add_library_profile():
+            library_profile = {}
+            cdb = self.gui.current_db
+            library_profile['epubs'] = len(cdb.search_getting_ids('formats:EPUB', ''))
+            library_profile['pdfs'] = len(cdb.search_getting_ids('formats:PDF', ''))
+            library_profile['mobis'] = len(cdb.search_getting_ids('formats:MOBI', ''))
 
-            TEMPLATE = '\n{subtitle:-^{separator_width}}\n'
-            max_name_width = max([len(v) for v in device_profile['user_installed_plugins'].keys()])
-            max_author_width = max([len(d['author']) for d in device_profile['user_installed_plugins'].values()])
-            max_version_width = max([len(d['version']) for d in device_profile['user_installed_plugins'].values()])
-            for plugin, d in sorted(device_profile['user_installed_plugins'].iteritems(), key=lambda item: item[0].lower()):
-                TEMPLATE += " {0:{1}} {2:{3}} {4:{5}}\n".format(
-                    plugin, max_name_width + 1,
-                    d['author'], max_author_width + 1,
-                    d['version'], max_version_width + 1)
+            device_profile['library_profile'] = library_profile
 
-            return TEMPLATE.format(**args)
+        def _add_load_time():
+            elapsed = _seconds_to_time(self.parent.load_time)
+            formatted = "{0:02d}:{1:02d}".format(int(elapsed['mins']), int(elapsed['secs']))
+            device_profile['load_time'] = formatted
 
-        def _format_caching_info():
-            args = {'subtitle': " Device booklist caching ",
-                    'separator_width': separator_width,
-                    'enabled': device_profile['device_caching']['enabled'],
-                    'available_space': device_profile['available_space'],
-                    'allocation_factor': device_profile['device_caching']['allocation_factor'],
-                    'allocated_space': device_profile['device_caching']['allocated_space']
-                    }
-            TEMPLATE = (
-                '\n{subtitle:-^{separator_width}}\n'
-                ' enabled: {enabled}\n'
-                ' available space: {available_space}\n'
-                ' allocation factor: {allocation_factor}%\n'
-                ' allocated space: {allocated_space}\n'
-                )
-            return TEMPLATE.format(**args)
+        def _add_iOSRA_version():
+            device_profile['iOSRA_version'] = "{0}.{1}.{2}".format(*self.parent.version)
+
+        def _add_platform_profile():
+            # Platform info
+            import platform
+            from calibre.constants import (__appname__, get_version, isportable, isosx,
+                                           isfrozen, is64bit, iswindows)
+            calibre_profile = "{0} {1}{2} isfrozen:{3} is64bit:{4}".format(
+                __appname__, get_version(),
+                ' Portable' if isportable else '', isfrozen, is64bit)
+            device_profile['CalibreProfile'] = calibre_profile
+
+            platform_profile = "{0} {1} {2}".format(
+                platform.platform(), platform.system(), platform.architecture())
+            device_profile['PlatformProfile'] = platform_profile
+
+            try:
+                if iswindows:
+                    os_profile = "Windows {0}".format(platform.win32_ver())
+                    if not is64bit:
+                        try:
+                            import win32process
+                            if win32process.IsWow64Process():
+                                os_profile += " 32bit process running on 64bit windows"
+                        except:
+                            pass
+                elif isosx:
+                    os_profile = "OS X {0}".format(platform.mac_ver()[0])
+                else:
+                    os_profile = "Linux {0}".format(platform.linux_distribution())
+            except:
+                import traceback
+                self._log(traceback.format_exc())
+                os_profile = "unknown"
+
+            device_profile['OSProfile'] = os_profile
+
+        def _add_prefs():
+            prefs = {'created_under': self.prefs.get('plugin_version')}
+            for pref in sorted(self.prefs.keys()):
+                if pref == 'plugin_version':
+                    continue
+                prefs[pref] = self.prefs.get(pref, None)
+            device_profile['prefs'] = prefs
 
         def _format_cache_files_info():
             args = {'subtitle': " Caches ",
@@ -524,6 +418,106 @@ class ConfigWidget(QWidget, Ui_Dialog):
                 ans += TEMPLATE.format(**args)
             return ans
 
+        def _format_caching_info():
+            args = {'subtitle': " Device booklist caching ",
+                    'separator_width': separator_width,
+                    'enabled': device_profile['device_caching']['enabled'],
+                    'available_space': device_profile['available_space'],
+                    'allocation_factor': device_profile['device_caching']['allocation_factor'],
+                    'allocated_space': device_profile['device_caching']['allocated_space']
+                    }
+            TEMPLATE = (
+                '\n{subtitle:-^{separator_width}}\n'
+                ' enabled: {enabled}\n'
+                ' available space: {available_space}\n'
+                ' allocation factor: {allocation_factor}%\n'
+                ' allocated space: {allocated_space}\n'
+                )
+            return TEMPLATE.format(**args)
+
+        def _format_device_info():
+            args = {'subtitle': " iDevice ",
+                    'separator_width': separator_width,
+                    'iOSRA_version': device_profile['iOSRA_version'],
+                    'iOS_version': device_profile['device_info']['ProductVersion'],
+                    'ProductType': device_profile['device_info']['ProductType'],
+                    'FSTotalBytes': device_profile['device_info']['FSTotalBytes'],
+                    'FSFreeBytes': device_profile['device_info']['FSFreeBytes'],
+                    'PasswordProtected': device_profile['device_info']['PasswordProtected']
+                    }
+            TEMPLATE = (
+                '\n{subtitle:-^{separator_width}}\n'
+                ' iOSRA version: {iOSRA_version}\n'
+                ' iOS version: {iOS_version}\n'
+                ' model: {ProductType}\n'
+                ' FSTotalBytes: {FSTotalBytes:,}\n'
+                ' FSFreeBytes: {FSFreeBytes:,}\n'
+                ' PasswordProtected: {PasswordProtected}\n'
+                )
+            return TEMPLATE.format(**args)
+
+        def _format_installed_plugins_info():
+            args = {'subtitle': " Installed plugins ",
+                    'separator_width': separator_width,
+                    }
+            for plugin in device_profile['user_installed_plugins']:
+                args[plugin] = "{{{0}}}".format(plugin)
+
+            TEMPLATE = '\n{subtitle:-^{separator_width}}\n'
+            max_name_width = max([len(v) for v in device_profile['user_installed_plugins'].keys()])
+            max_author_width = max([len(d['author']) for d in device_profile['user_installed_plugins'].values()])
+            max_version_width = max([len(d['version']) for d in device_profile['user_installed_plugins'].values()])
+            for plugin, d in sorted(device_profile['user_installed_plugins'].iteritems(), key=lambda item: item[0].lower()):
+                TEMPLATE += " {0:{1}} {2:{3}}\n".format(
+                    plugin, max_name_width + 1,
+                    d['version'], max_version_width + 1)
+
+            return TEMPLATE.format(**args)
+
+        def _format_prefs_info():
+            args = {'subtitle': " Prefs ",
+                    'separator_width': separator_width}
+            for pref in device_profile['prefs']:
+                args[pref] = device_profile['prefs'][pref]
+
+            TEMPLATE = '\n{subtitle:-^{separator_width}}\n'
+            for pref in sorted(device_profile['prefs'].keys()):
+                TEMPLATE += "{0}: {{{1}}}\n".format(pref, pref)
+
+            return TEMPLATE.format(**args)
+
+        def _format_reader_app_info():
+            args = {'subtitle': " {} ".format(device_profile['prefs']['preferred_reader_app']),
+                    'separator_width': separator_width,
+                    'device_books': device_profile['device_book_count'],
+                    'load_time': device_profile['load_time']
+                    }
+            TEMPLATE = (
+                '\n{subtitle:-^{separator_width}}\n'
+                ' device books: {device_books}\n'
+                ' init time: {load_time}\n'
+                )
+            return TEMPLATE.format(**args)
+
+        def _format_system_info():
+            # System information
+            args = {'subtitle': " System ",
+                    'separator_width': separator_width,
+                    'CalibreProfile': device_profile['CalibreProfile'],
+                    'OSProfile': device_profile['OSProfile'],
+                    'library_books': "{0:,} EPUBs, {1:,} MOBIs, {2:,} PDFs".format(
+                        device_profile['library_profile']['epubs'],
+                        device_profile['library_profile']['mobis'],
+                        device_profile['library_profile']['pdfs'])
+                    }
+
+            TEMPLATE = (
+                '{subtitle:-^{separator_width}}\n'
+                ' {CalibreProfile}\n'
+                ' {OSProfile}\n'
+                ' library: {library_books}\n')
+            return TEMPLATE.format(**args)
+
         def _seconds_to_time(s):
             years, s = divmod(s, 31556952)
             min, s = divmod(s, 60)
@@ -532,7 +526,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
             ans = {'days': d, 'hours': h, 'mins': min, 'secs': s}
             return ans
 
-
+        # ~~~ Entry point ~~~
         self._log_location()
 
         # Collect the diagnostic information
@@ -550,9 +544,6 @@ class ConfigWidget(QWidget, Ui_Dialog):
         _add_cache_files()
 
         # Format for printing
-#         for key, val in sorted(device_profile.iteritems()):
-#             self._log("{}: {}".format(key, val))
-
         det_msg = ''
         separator_width = 80
 

@@ -48,6 +48,7 @@ if True:
 
         # ~~~~~~~~~ Variables ~~~~~~~~~
         self.busy = False
+        self.DEBUG_CAN_HANDLE = self.prefs.get('debug_can_handle', False)
         self.documents_folder = b'/Documents'
         fm = self.prefs.get('kindle_enabled_formats', KINDLE_ENABLED_FORMATS)
         self.format_map = [fmt.lower() for fmt in fm]
@@ -263,9 +264,8 @@ if True:
 
         # ~~~ Entry point ~~~
 
-        DEBUG_CAN_HANDLE = False
 
-        if DEBUG_CAN_HANDLE:
+        if self.DEBUG_CAN_HANDLE:
             self._log_location(_show_current_connection())
 
         # Set a flag so eject doesn't interrupt communication with iDevice
@@ -273,7 +273,7 @@ if True:
 
         # 0: If we've already discovered a connected device without app, exit
         if self.ios_connection['udid'] and self.ios_connection['app_installed'] is False:
-            if DEBUG_CAN_HANDLE:
+            if self.DEBUG_CAN_HANDLE:
                 self._log("self.ios_connection['udid']: %s" % self.ios_connection['udid'])
                 self._log("self.ios_connection['app_installed']: %s" % self.ios_connection['app_installed'])
                 self._log("0: returning %s" % self.ios_connection['app_installed'])
@@ -282,13 +282,13 @@ if True:
 
         # 0. If user ejected, exit
         if self.ios_connection['udid'] and self.ejected is True:
-            if DEBUG_CAN_HANDLE:
+            if self.DEBUG_CAN_HANDLE:
                 self._log("'%s' ejected" % self.ios_connection['device_name'])
             self.busy = False
             return False
 
         # 1: Is there a (single) connected iDevice?
-        if False and DEBUG_CAN_HANDLE:
+        if False and self.DEBUG_CAN_HANDLE:
             self._log("1. self.ios_connection: %s" % _show_current_connection())
 
         connected_ios_devices = self.ios.get_device_list()
@@ -296,69 +296,28 @@ if True:
         if len(connected_ios_devices) == 1:
             '''
             If we have an existing USB connection, determine state
-             Three possible outcomes:
-              a) connected.xml exists (<state> = 'online')
-              b) connected.xml exists (<state> = 'offline')
-              c) connected.xml does not exist (User not in connection mode)
             '''
-            """
-            if self.ios_connection['connected']:
-                connection_live = False
-                if self.ios.exists(self.connected_fs):
-                    # Parse the connection data for state
-                    connection = etree.fromstring(self.ios.read(self.connected_fs))
-                    connection_state = connection.find('state').text
-                    if connection_state == 'online':
-                        connection_live = True
-                        if DEBUG_CAN_HANDLE:
-                            self._log("1a. <state> = online")
-                    else:
-                        connection_live = False
-                        if DEBUG_CAN_HANDLE:
-                            self._log("1b. <state> = offline")
-
-                    # Show the connection initiation time
-                    self.connection_timestamp = float(connection.get('timestamp'))
-                    d = datetime.fromtimestamp(self.connection_timestamp)
-                    if DEBUG_CAN_HANDLE:
-                        self._log("   connection last refreshed %s" % (d.strftime('%Y-%m-%d %H:%M:%S')))
-
-                else:
-                    if DEBUG_CAN_HANDLE:
-                        self._log("1c. user exited connection mode")
-
-                if not connection_live:
-                    # Lost the connection, reset
-                    #self._reset_ios_connection(udid=connected_ios_devices[0])
-                    self.ios_connection['connected'] = False
-
-                if DEBUG_CAN_HANDLE:
-                    self._log("1d: returning %s" % connection_live)
-                self.busy = False
-                return connection_live
-
-            elif self.ios_connection['udid'] != connected_ios_devices[0]:
-                self._reset_ios_connection(udid=connected_ios_devices[0], verbose=DEBUG_CAN_HANDLE)
-            """
+            if self.ios_connection['udid'] != connected_ios_devices[0]:
+                self._reset_ios_connection(udid=connected_ios_devices[0])
 
             # 2. Is app installed on this iDevice?
             if not self.ios_connection['app_installed']:
-                if DEBUG_CAN_HANDLE:
+                if self.DEBUG_CAN_HANDLE:
                     self._log("2. App installed, attempting connection")
                 self.ios_connection['app_installed'] = self.ios.mount_ios_app(app_id=self.app_id)
                 self.ios_connection['device_name'] = self.ios.device_name
-                if DEBUG_CAN_HANDLE:
+                if self.DEBUG_CAN_HANDLE:
                     self._log("2a. self.ios_connection: %s" % _show_current_connection())
 
                 # If no app, we can't handle, so exit
                 if not self.ios_connection['app_installed']:
-                    if DEBUG_CAN_HANDLE:
+                    if self.DEBUG_CAN_HANDLE:
                         self._log("2. App not installed")
                     self.busy = False
                     return self.ios_connection['app_installed']
 
             # 3. Check to see if connected.xml exists in staging folder
-            if DEBUG_CAN_HANDLE:
+            if self.DEBUG_CAN_HANDLE:
                 self._log("3. Looking for calibre connection mode")
 
             connection_live = True
@@ -377,7 +336,7 @@ if True:
             self.ios.disconnect_idevice()
 
         # 4. show connection
-        if DEBUG_CAN_HANDLE:
+        if self.DEBUG_CAN_HANDLE:
             self._log("4. self.ios_connection: %s" % _show_current_connection())
 
         self.busy = False
@@ -1081,7 +1040,7 @@ if True:
                               device_name=None,
                               ejected=False,
                               udid=0):
-        if self.prefs.get('development_mode', False):
+        if self.DEBUG_CAN_HANDLE:
             connection_state = ("connected:{0:1} app_installed:{1:1} device_name:{2} udid:{3}".format(
                 self.ios_connection['connected'],
                 self.ios_connection['app_installed'],

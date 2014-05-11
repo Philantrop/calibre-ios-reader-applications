@@ -1074,22 +1074,23 @@ class iOSReaderApp(DriverBase, Logger):
                 version = getattr(plugin, 'version', None)
                 user_installed_plugins[name] = {'author': author, 'version': "{0}.{1}.{2}".format(*version)}
 
-        max_name_width = max([len(v) for v in user_installed_plugins.keys()])
-        max_author_width = max([len(d['author']) for d in user_installed_plugins.values()])
-        max_version_width = max([len(d['version']) for d in user_installed_plugins.values()])
-        self._log("{0:<{1}}  {2:<{3}}  {4:<{5}}".format('plugin', max_name_width,
-                                                        'author', max_author_width,
-                                                        'version', max_version_width))
-        self._log("{0:-^{1}}  {2:-^{3}}  {4:-^{5}}".format('', max_name_width,
-                                                           '', max_author_width,
-                                                           '', max_version_width))
-        for plugin, d in sorted(user_installed_plugins.iteritems(), key=lambda item: item[0].lower()):
-            self._log("{0:{1}} {2:{3}} {4:{5}}".format(plugin, max_name_width + 1,
-                                                       d['author'], max_author_width + 1,
-                                                       d['version'], max_version_width + 1))
-        self._log("{0:-^{1}}  {2:-^{3}}  {4:-^{5}}".format('', max_name_width,
-                                                           '', max_author_width,
-                                                           '', max_version_width))
+        if user_installed_plugins:
+            max_name_width = max([len(v) for v in user_installed_plugins.keys()])
+            max_author_width = max([len(d['author']) for d in user_installed_plugins.values()])
+            max_version_width = max([len(d['version']) for d in user_installed_plugins.values()])
+            self._log("{0:<{1}}  {2:<{3}}  {4:<{5}}".format('plugin', max_name_width,
+                                                            'author', max_author_width,
+                                                            'version', max_version_width))
+            self._log("{0:-^{1}}  {2:-^{3}}  {4:-^{5}}".format('', max_name_width,
+                                                               '', max_author_width,
+                                                               '', max_version_width))
+            for plugin, d in sorted(user_installed_plugins.iteritems(), key=lambda item: item[0].lower()):
+                self._log("{0:{1}} {2:{3}} {4:{5}}".format(plugin, max_name_width + 1,
+                                                           d['author'], max_author_width + 1,
+                                                           d['version'], max_version_width + 1))
+            self._log("{0:-^{1}}  {2:-^{3}}  {4:-^{5}}".format('', max_name_width,
+                                                               '', max_author_width,
+                                                               '', max_version_width))
 
     def _generate_thumbnail(self, book):
         '''

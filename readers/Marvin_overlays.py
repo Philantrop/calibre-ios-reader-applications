@@ -1447,7 +1447,7 @@ if True:
                 if not target_epub_exists:
                     self.cached_books[this_book.path]['download_pending'] = True
 
-                if self.prefs.get('development_mode', False):
+                if False and self.prefs.get('development_mode', False):
                     self._log("self.cached_books:")
                     for p,v in self.cached_books.iteritems():
                         self._log(" {0} {1}".format(p, repr(v['title'])))
