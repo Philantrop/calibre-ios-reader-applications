@@ -215,7 +215,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
                 ''' Marvin-specific cache files '''
                 cache_files['mainDb.sqlite (remote)'] = _get_ios_stats('/Library/mainDb.sqlite')
                 cache_files['booklist.db (remote)'] = _get_ios_stats('Library/calibre.mm/booklist.db')
-                cache_files['content_hashes.db (remote)'] = _get_ios_stats('Library/calibre.mm/content_hashes.db')
+                cache_files['mxd_content_hashes.db (remote)'] = _get_ios_stats('Library/calibre.mm/content_hashes.db')
 
                 # booklist.db from iOSRA resources
                 path = os.path.join(self.parent.resources_path, 'booklist.db')

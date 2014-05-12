@@ -12,7 +12,7 @@ import os, importlib, sys
 from functools import partial
 from urllib2 import FileHandler
 
-from calibre.gui2 import open_url, warning_dialog
+from calibre.gui2 import info_dialog, open_url, warning_dialog
 from calibre.devices.usbms.driver import debug_print
 from calibre_plugins.ios_reader_apps import get_cc_mapping, set_cc_mapping
 from calibre_plugins.ios_reader_apps.config import widget_path
@@ -55,6 +55,7 @@ class PluginWidget(QWidget, Ui_Form):
     def __init__(self, parent):
         QWidget.__init__(self, parent=None)
         self.setupUi(self)
+        self.connected_device = parent.parent
         self.gui = parent.gui
         self.parent = parent
         self.prefs = parent.prefs
@@ -71,6 +72,29 @@ class PluginWidget(QWidget, Ui_Form):
             eligible_collection_fields = self.get_eligible_custom_fields([datatype])
             field = eligible_collection_fields[cf]
         set_cc_mapping('marvin_collections', combobox=cf, field=field)
+
+    def delete_caches(self):
+        '''
+        Delete booklist caches from local and remote storage
+        '''
+        self._log_location()
+        det_msg = ''
+
+        # Local
+        lhc = os.path.join(self.connected_device.resources_path, 'booklist.db')
+        if os.path.exists(lhc):
+            os.remove(lhc)
+            det_msg += "Local booklist cache deleted:\n {}\n".format(lhc)
+
+        # Remote
+        rhc = b'/'.join(['/Library', 'calibre.mm', 'booklist.db'])
+        if self.connected_device.ios.exists(rhc):
+            self.connected_device.ios.remove(rhc)
+            det_msg += "Remote booklist cache deleted:\n {}".format(rhc)
+
+        info_dialog(self.gui, 'Marvin options',
+                    'Booklist caches cleared', show=True,
+                    show_copy_button=False, det_msg=det_msg)
 
     def get_eligible_custom_fields(self, eligible_types=[], is_multiple=None):
         '''
@@ -149,8 +173,12 @@ class PluginWidget(QWidget, Ui_Form):
 
         # ~~~~~~ Help ~~~~~~
         # Add the Help icon to the help button
-        self.help_button.setIcon(QIcon(I('help.png')))
-        self.help_button.clicked.connect(self.show_help)
+        self.help_pb.setIcon(QIcon(I('help.png')))
+        self.help_pb.clicked.connect(self.show_help)
+
+        # Add Recycle icon to Delete caches button
+        self.delete_caches_pb.setIcon(QIcon(I('trash.png')))
+        self.delete_caches_pb.clicked.connect(self.delete_caches)
 
         # Clean up JSON file < v1.3.0
         prefs_version = self.prefs.get("plugin_version", "0.0.0")
