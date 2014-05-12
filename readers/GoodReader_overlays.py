@@ -799,8 +799,7 @@ if True:
         from calibre.ebooks.metadata import authors_to_string
 
         self._log_location(metadata.title)
-        this_book = Book(metadata.title, ' & '.join(metadata.authors))
-        #this_book = Book(metadata.title, authors_to_string(metadata.authors))
+        this_book = Book(metadata.title, authors=metadata.authors)
         this_book.author_sort = metadata.author_sort
         this_book.dateadded = time.mktime(time.gmtime())
         this_book.datetime = datetime.fromtimestamp(this_book.dateadded).timetuple()
@@ -855,7 +854,7 @@ if True:
             #self._log(repr(cached_book[b'authors']))
             #self._log(authors_to_string(cached_book[b'authors'].split(' & ')))
 
-            this_book = Book(cached_book[b'title'], cached_book[b'authors'])
+            this_book = Book(cached_book[b'title'], authors=cached_book[b'authors'].split(' & '))
             this_book.author_sort = cached_book[b'author_sort']
             this_book.datetime = datetime.fromtimestamp(cached_book[b'dateadded']).timetuple()
             this_book.path = cached_book[b'filename']
@@ -944,7 +943,7 @@ if True:
             stream = cStringIO.StringIO(f.read())
 
         mi = get_metadata(stream, cover=False)
-        this_book = Book(mi.title, ' & '.join(mi.authors))
+        this_book = Book(mi.title, authors=mi.authors)
         this_book.author_sort = author_to_author_sort(mi.authors[0])
         this_book.datetime = datetime.fromtimestamp(int(pdf_stats['stats']['st_birthtime'])).timetuple()
         this_book.dateadded = int(pdf_stats['stats']['st_birthtime'])

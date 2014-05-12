@@ -201,6 +201,8 @@ if True:
                         books are on the card return empty list.
         @return: A BookList.
 
+        Note that Marvin handles multiple authors differently than calibre, and this
+        code emulates Marvin's style of comma-separated authors
         '''
         from calibre import strftime
 
@@ -1713,13 +1715,14 @@ if True:
         Need original metadata for id, uuid
         Need metadata_x for transformed title, author
         metadata.cover: (tmp) path to cover (jpg)
+        Note that we are emulating Marvin's multiple author style of comma-separated authors
         '''
         from calibre import strftime
         from calibre.ebooks.metadata import authors_to_string
 
         self._log_location("title: %s uuid: %s" % (repr(metadata_x.title), repr(metadata.uuid)))
 
-        this_book = Book(metadata_x.title, authors_to_string(metadata_x.authors))
+        this_book = Book(metadata_x.title, ', '.join(metadata_x.authors))
         this_book.author_sort = metadata_x.author_sort
         this_book.uuid = metadata.uuid
 

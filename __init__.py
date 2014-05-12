@@ -176,8 +176,20 @@ class Book(Metadata):
                 return False
         return True
 
-    def __init__(self, title, author):
-        Metadata.__init__(self, title, authors=[author])
+    #def __init__(self, title, author):
+    #    Metadata.__init__(self, title, authors=[author])
+
+    def __init__(self, *args, **kwargs):
+        if len(args) == 1:
+            title = args[0]
+            author = "Unknown"
+        elif len(args) == 2:
+            title, author = args
+        if 'authors' in kwargs:
+            authors = kwargs['authors']
+        else:
+            authors = [author]
+        Metadata.__init__(self, title, authors=authors)
 
     def __ne__(self, other):
         all_mxd_keys = self.iosra_standard_keys + self.iosra_custom_keys

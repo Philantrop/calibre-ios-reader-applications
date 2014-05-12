@@ -499,7 +499,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
             TEMPLATE = (
                 '\n{subtitle:-^{separator_width}}\n'
                 ' device books: {device_books}\n'
-                ' init time: {load_time}\n'
+                ' initialization time: {load_time}\n'
                 )
             return TEMPLATE.format(**args)
 
