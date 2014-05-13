@@ -487,7 +487,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
 
             TEMPLATE = '\n{subtitle:-^{separator_width}}\n'
             for pref in sorted(device_profile['prefs'].keys()):
-                TEMPLATE += "{0}: {{{1}}}\n".format(pref, pref)
+                TEMPLATE += " {0}: {{{1}}}\n".format(pref, pref)
 
             return TEMPLATE.format(**args)
 
@@ -564,9 +564,9 @@ class ConfigWidget(QWidget, Ui_Dialog):
         det_msg += _format_cache_files_info()
 
         # Present the results
-        title = "Connected device profile"
+        title = "Device diagnostics"
         msg = (
-               '<p>{0}</p>'
+               '<p>Device diagnostics generated for {}.</p>'
                '<p>Click <b>Show details</b> for summary.</p>'
               ).format(self.parent.ios.device_name)
 
