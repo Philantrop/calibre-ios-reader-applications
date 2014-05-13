@@ -60,13 +60,13 @@ plugin_prefs = JSONConfig('plugins/iOS reader applications')
 # 'iBooks' is removed under linux
 # If an app is available in separate versions for iPad/iPhone, list iPad version first
 READER_APP_ALIASES = {
-                      'GoodReader':  [b'com.goodiware.GoodReaderIPad', b'com.goodiware.GoodReader'],
-                      'GoodReader4': [b'com.goodiware.goodreader4'],
-                      'iBooks':      [b'com.apple.iBooks'],
-                      'Kindle':      [b'com.amazon.Lassen'],
-                      'Marvin':      [b'com.appstafarian.MarvinIP',
-                                      b'com.appstafarian.MarvinIP-free',
-                                      b'com.appstafarian.Marvin']
+                      'GoodReader':   [b'com.goodiware.GoodReaderIPad', b'com.goodiware.GoodReader'],
+                      'GoodReader 4': [b'com.goodiware.goodreader4'],
+                      'iBooks':       [b'com.apple.iBooks'],
+                      'Kindle':       [b'com.amazon.Lassen'],
+                      'Marvin':       [b'com.appstafarian.MarvinIP',
+                                       b'com.appstafarian.MarvinIP-free',
+                                       b'com.appstafarian.Marvin']
                      }
 
 # Default format maps for Kindle options panel
@@ -1192,7 +1192,8 @@ class iOSReaderApp(DriverBase, Logger):
                 if len(device_list) == 1:
                     connected = self.ios.connect_idevice()
                     if not connected:
-                        raise libiMobileDeviceException("Unable to connect to iDevice")
+                        raise libiMobileDeviceException("Unable to connect to iDevice. "
+                                                        "If you are updating, disconnect your iDevice first.")
                     preferences = self.ios.get_preferences()
                     self.ios.disconnect_idevice()
 
@@ -1207,20 +1208,24 @@ class iOSReaderApp(DriverBase, Logger):
                     if self.prefs.get('development_mode', False):
                         app_id = self.prefs.get('development_app_id', None)
                     if not app_id:
-                        # Find the first installed app (iPad version takes precedence)
-                        for _app_id in READER_APP_ALIASES[self.ios_reader_app]:
-                            self._log("mounting '%s'" % _app_id)
-                            if self.ios.mount_ios_app(app_id=_app_id):
-                                app_id = _app_id
-                                self.ios.disconnect_idevice()
-                                break
+                        if self.ios_reader_app in READER_APP_ALIASES:
+
+                            # Find the first installed app (iPad version takes precedence)
+                            for _app_id in READER_APP_ALIASES[self.ios_reader_app]:
+                                self._log("mounting '%s'" % _app_id)
+                                if self.ios.mount_ios_app(app_id=_app_id):
+                                    app_id = _app_id
+                                    self.ios.disconnect_idevice()
+                                    break
+                        else:
+                            self._log("'{}' is not a valid preferred_reader_app selection".format(self.ios_reader_app))
                 else:
                     self._log("Too many connected iDevices")
             else:
                 self._log("No connected iDevices")
         except:
             import traceback
-            #traceback.print_exc()
+            traceback.print_exc()
             exc_type, exc_value, exc_traceback = sys.exc_info()
             self._log_location("ERROR: {0}".format(
                 traceback.format_exception_only(exc_type, exc_value)[0].strip()))
@@ -1268,7 +1273,7 @@ class iOSReaderApp(DriverBase, Logger):
             overlay = imp.load_source("temporary_overlay_methods", do)
         else:
             # Special-case GoodReader4 to use the same overlay as GoodReader
-            if cls_name == "GoodReader4":
+            if cls_name == "GoodReader 4":
                 cls_name = "GoodReader"
             overlay_source = 'readers/%s_overlays.py' % cls_name
             basename = re.sub('readers/', '', overlay_source)

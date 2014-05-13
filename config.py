@@ -183,7 +183,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
             #   Library/mainDb.sqlite
             #   Library/calibre.mm/booklist.db
             #   Library/calibre.mm/content_hashes.db
-            # GoodReader, GoodReader4, Kindle:
+            # GoodReader, GoodReader 4, Kindle:
             #   Library/calibre_metadata.sqlite
             # Local:
             #   <calibre resource dir>/iOS_reader_applications_resources/booklist.db
@@ -215,6 +215,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
             if device_profile['prefs']['preferred_reader_app'] == 'Marvin':
                 ''' Marvin-specific cache files '''
                 cache_files['mainDb.sqlite (remote)'] = _get_ios_stats('/Library/mainDb.sqlite')
+                cache_files['mainDb.sqlite (local)'] = _get_os_stats(self.parent.local_db_path)
                 cache_files['booklist.db (remote)'] = _get_ios_stats('Library/calibre.mm/booklist.db')
                 cache_files['mxd_content_hashes.db (remote)'] = _get_ios_stats('Library/calibre.mm/content_hashes.db')
 
@@ -235,8 +236,9 @@ class ConfigWidget(QWidget, Ui_Dialog):
                     name = path.rsplit(os.path.sep)[-1]
                     cache_files['mxd_{}'.format(name)] = ans
 
-            elif device_profile['prefs']['preferred_reader_app'] in ['GoodReader', 'GoodReader4', 'Kindle']:
+            elif device_profile['prefs']['preferred_reader_app'] in ['GoodReader', 'GoodReader 4', 'Kindle']:
                 cache_files['calibre_metadata.sqlite (remote)'] = _get_ios_stats('Library/calibre_metadata.sqlite')
+                cache_files['calibre_metadata.sqlite (local)'] = _get_os_stats(self.parent.local_metadata)
 
             device_profile['cache_files'] = cache_files
 
@@ -357,20 +359,26 @@ class ConfigWidget(QWidget, Ui_Dialog):
             device_profile['prefs'] = prefs
 
         def _format_cache_files_info():
-            args = {'subtitle': " Caches ",
-                    'separator_width': separator_width}
-            for cache_fs in device_profile['cache_files']:
-                args[cache_fs] = "{%s}" % cache_fs
-
-            TEMPLATE = '\n{subtitle:-^{separator_width}}\n'
             max_fs_width = max([len(v) for v in device_profile['cache_files'].keys()])
             max_size_width = 12
             max_ts_width = 20
 
+            args = {'subtitle': " Caches ",
+                    'separator_width': separator_width,
+                    'report_time_label': "report generated",
+                    'report_time': report_time,
+                    'fs_width': max_fs_width + 1,
+                    'ts_width': max_ts_width + 1}
+            for cache_fs in device_profile['cache_files']:
+                args[cache_fs] = "{%s}" % cache_fs
+
+            TEMPLATE = ('\n{subtitle:-^{separator_width}}\n'
+                        ' {report_time_label:{fs_width}} {report_time:{ts_width}}\n')
+
             # iOSRA cache files
             if device_profile['prefs']['preferred_reader_app'] == 'Marvin':
 
-                ans = '\n{subtitle:-^{separator_width}}\n'.format(**args)
+                ans = TEMPLATE.format(**args)
                 # iOSRA cache files
                 TEMPLATE = 'iOSRA\n'
                 for cache_fs, d in sorted(device_profile['cache_files'].iteritems(), key=lambda item: item[0].lower()):
@@ -506,24 +514,21 @@ class ConfigWidget(QWidget, Ui_Dialog):
 
         def _format_system_info():
             # System information
-            report_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-            args = {'subtitle': " System ",
+            args = {'subtitle': " {} ".format(report_time),
                     'separator_width': separator_width,
                     'CalibreProfile': device_profile['CalibreProfile'],
                     'OSProfile': device_profile['OSProfile'],
                     'library_books': "{0:,} EPUBs, {1:,} MOBIs, {2:,} PDFs".format(
                         device_profile['library_profile']['epubs'],
                         device_profile['library_profile']['mobis'],
-                        device_profile['library_profile']['pdfs']),
-                    'report_time': report_time
+                        device_profile['library_profile']['pdfs'])
                     }
 
             TEMPLATE = (
                 '{subtitle:-^{separator_width}}\n'
                 ' {CalibreProfile}\n'
                 ' {OSProfile}\n'
-                ' library: {library_books}\n'
-                ' report time: {report_time}\n')
+                ' library: {library_books}\n')
             return TEMPLATE.format(**args)
 
         def _seconds_to_time(s):
@@ -536,6 +541,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
 
         # ~~~ Entry point ~~~
         self._log_location()
+        report_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 
         # Collect the diagnostic information
         device_profile = {}
