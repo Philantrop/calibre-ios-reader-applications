@@ -5,6 +5,7 @@ from __future__ import (unicode_literals, division, absolute_import,
                         print_function)
 
 import cStringIO, importlib, re, os, sys
+from datetime import datetime
 
 from calibre.devices.usbms.driver import debug_print
 from calibre.gui2 import open_url, show_restart_warning
@@ -505,6 +506,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
 
         def _format_system_info():
             # System information
+            report_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
             args = {'subtitle': " System ",
                     'separator_width': separator_width,
                     'CalibreProfile': device_profile['CalibreProfile'],
@@ -512,14 +514,16 @@ class ConfigWidget(QWidget, Ui_Dialog):
                     'library_books': "{0:,} EPUBs, {1:,} MOBIs, {2:,} PDFs".format(
                         device_profile['library_profile']['epubs'],
                         device_profile['library_profile']['mobis'],
-                        device_profile['library_profile']['pdfs'])
+                        device_profile['library_profile']['pdfs']),
+                    'report_time': report_time
                     }
 
             TEMPLATE = (
                 '{subtitle:-^{separator_width}}\n'
                 ' {CalibreProfile}\n'
                 ' {OSProfile}\n'
-                ' library: {library_books}\n')
+                ' library: {library_books}\n'
+                ' report time: {report_time}\n')
             return TEMPLATE.format(**args)
 
         def _seconds_to_time(s):

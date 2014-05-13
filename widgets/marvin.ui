@@ -7,7 +7,7 @@
     <x>0</x>
     <y>0</y>
     <width>422</width>
-    <height>332</height>
+    <height>374</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -38,7 +38,7 @@
            <string>Delete booklist caches</string>
           </property>
           <property name="text">
-           <string>Delete caches</string>
+           <string>Reset caches</string>
           </property>
          </widget>
         </item>
