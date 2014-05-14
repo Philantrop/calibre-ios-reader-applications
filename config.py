@@ -110,8 +110,8 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self.reader_apps.addItems(sorted(app_list, key=lambda s: s.lower()))
 
         # Get the last-used reader_app
-        pref = self.prefs.get('preferred_reader_app', '')
-        idx = self.reader_apps.findText(pref)
+        pra = self.prefs.get('preferred_reader_app', '')
+        idx = self.reader_apps.findText(pra)
         if idx > -1:
             self.reader_apps.setCurrentIndex(idx)
 
@@ -131,7 +131,9 @@ class ConfigWidget(QWidget, Ui_Dialog):
         self.support_pb.clicked.connect(self.support_forum)
         self.support_pb.setIcon(QIcon(I('help.png')))
         self.diagnostics_pb.setIcon(QIcon(I('dialog_information.png')))
-        if self.available_space == -1:
+
+        if (self.available_space == -1 or
+            (pra == 'Marvin' and getattr(self.parent, 'cached_books', None) is None)):
             self.diagnostics_pb.setEnabled(False)
         else:
             self.diagnostics_pb.clicked.connect(self.device_diagnostics)
