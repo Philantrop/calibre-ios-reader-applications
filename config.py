@@ -574,8 +574,7 @@ class ConfigWidget(QWidget, Ui_Dialog):
         # Present the results
         title = "Device diagnostics"
         msg = (
-               '<p>Device diagnostics generated for {}.</p>'
-               '<p>Click <b>Show details</b> for summary.</p>'
+               '<p>Device diagnostics for {}.</p>'
               ).format(self.parent.ios.device_name)
 
         # Set dialog det_msg to monospace

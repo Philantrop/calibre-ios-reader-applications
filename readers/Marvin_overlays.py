@@ -140,6 +140,7 @@ if True:
         # Hook exit
         atexit.register(self.shutdown)
 
+
     def add_books_to_metadata(self, locations, metadata, booklists):
         '''
         Add locations to the booklists. This function must not communicate with
