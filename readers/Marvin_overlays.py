@@ -304,6 +304,9 @@ if True:
 
                     # Get the books
                     cur = con.cursor()
+                    cur.execute('''SELECT count(*) FROM Books''')
+                    book_count = cur.fetchone()[0]
+
                     try:
                         cur.execute('''SELECT
                                         Author,
@@ -333,9 +336,8 @@ if True:
                         self.cached_books = {}
                         raise DatabaseMalformedException("Marvin database is damaged")
 
-                    rows = cur.fetchall()
-                    book_count = len(rows)
-                    for i, row in enumerate(rows):
+                    for i in range(book_count):
+                        row = cur.fetchone()
                         book_id = row[b'id_']
 
                         # Get the primary metadata from Books
