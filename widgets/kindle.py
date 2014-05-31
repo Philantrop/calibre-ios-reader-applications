@@ -44,8 +44,11 @@ class PluginWidget(QWidget, Ui_Form):
         '''
         self.name = name
 
-        # Supported, enabled formats
+        # Allow for updated KINDLE_SUPPORTED_FORMATS
         all_formats = self.prefs.get('kindle_supported_formats', KINDLE_SUPPORTED_FORMATS)
+        if len(all_formats) != len(KINDLE_SUPPORTED_FORMATS):
+            all_formats = KINDLE_SUPPORTED_FORMATS
+
         enabled_formats = self.prefs.get('kindle_enabled_formats', KINDLE_ENABLED_FORMATS)
 
         for format in all_formats:

@@ -70,8 +70,8 @@ READER_APP_ALIASES = {
                      }
 
 # Default format maps for Kindle options panel
-KINDLE_ENABLED_FORMATS = ['MOBI']
-KINDLE_SUPPORTED_FORMATS = ['MOBI']
+KINDLE_ENABLED_FORMATS = ['MOBI', 'PDF']
+KINDLE_SUPPORTED_FORMATS = ['MOBI', 'PDF']
 
 class Logger():
     '''
@@ -576,7 +576,7 @@ class iOSReaderApp(DriverBase, Logger):
     temp_dir = None
     verbose = None
     # #mark ~~~ plugin version, minimum calibre version ~~~
-    version = (1, 4, 0)
+    version = (1, 4, 1)
     minimum_calibre_version = (1, 37, 0)
 
     # #mark ~~~ USB fingerprints ~~~

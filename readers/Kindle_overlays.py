@@ -896,14 +896,25 @@ if True:
         Return a populated Book object with available metadata
         '''
         from calibre.ebooks.metadata import author_to_author_sort, authors_to_string, title_sort
-        from calibre.ebooks.metadata.mobi import get_metadata
         self._log_location(repr(book))
+        format = book.rsplit('.')[1].lower()
+        if format == 'mobi':
+            from calibre.ebooks.metadata.mobi import get_metadata as get_mobi_metadata
+            path = os.path.join(self.temp_dir, book_stats['path'])
+            with open(path, 'rb') as f:
+                stream = cStringIO.StringIO(f.read())
+            mi = get_mobi_metadata(stream)
 
-        mobi_path = os.path.join(self.temp_dir, book_stats['path'])
-        with open(mobi_path, 'rb') as f:
-            stream = cStringIO.StringIO(f.read())
+        elif format == 'pdf':
+            from calibre.ebooks.metadata.pdf import get_metadata as get_pdf_metadata
+            path = os.path.join(self.temp_dir, book_stats['path'])
+            with open(path, 'rb') as f:
+                stream = cStringIO.StringIO(f.read())
+            mi = get_pdf_metadata(stream)
 
-        mi = get_metadata(stream)
+        else:
+            self._log("unsupported format: '{}'".format(format))
+            return Book()
 
         if False:
             ''' Perform a bit of voodoo to match Kindle multiple author style '''

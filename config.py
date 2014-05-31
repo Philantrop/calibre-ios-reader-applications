@@ -278,7 +278,10 @@ class ConfigWidget(QWidget, Ui_Dialog):
 
         def _add_device_book_count():
             # Device book count
-            device_profile['device_book_count'] = len(self.parent.cached_books)
+            try:
+                device_profile['device_book_count'] = len(self.parent.cached_books)
+            except:
+                device_profile['device_book_count'] = "parent.cached_books not found"
 
         def _add_device_info():
             cdp = self.parent.device_profile
