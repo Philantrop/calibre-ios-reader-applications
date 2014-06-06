@@ -1731,7 +1731,7 @@ if True:
 
         cover_hash = 0
 
-        if metadata.has_cover and metadata.cover:
+        if getattr(metadata, 'has_cover', False) and metadata.cover:
             # Generate cover_hash from cover.jpg
             with open(metadata.cover, 'rb') as f:
                 cover_bytes = f.read()
@@ -2111,7 +2111,7 @@ if True:
 
             # Save st_size for the small covers folder
             stats = self.ios.stat(self._cover_subpath(size="small"))
-            profile['covers_size'] = stats['st_size']
+            profile['covers_size'] = stats.get('st_size', 0)
 
             # Get the table sizes
             for table in ['Books', 'BookCollections', 'Collections']:
