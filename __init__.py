@@ -562,7 +562,7 @@ class iOSReaderApp(DriverBase, Logger):
     '''
 
     app_id = None
-    author = 'GRiker'
+    author = 'Wulf C. Krueger'
     books_subpath = None
     description = 'Communicate with Apple iOS reader applications'
     device_profile = None
