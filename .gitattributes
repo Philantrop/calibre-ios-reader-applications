@@ -1,0 +1,10 @@
+*~		export-ignore
+.project	export-ignore
+.pydevproject	export-ignore
+.settings	export-ignore
+.settings/**	export-ignore
+readers/_**	export-ignore
+*.DS_Store	export-ignore
+_Resources	export-ignore
+_Resources/**	export-ignore
+.gitignore	export-ignore
