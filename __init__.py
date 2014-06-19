@@ -10,7 +10,7 @@ __docformat__ = 'restructuredtext en'
 
 """
 Source for this plugin is available as a Github repository at
-https://github.com/GRiker/calibre-apple-reader-applications,
+https://github.com/Philantrop/calibre-apple-reader-applications,
 which also includes an overview of the communication protocol in README.md
 """
 import base64, cStringIO, datetime, hashlib, imp, mechanize, os, platform, re, sqlite3, sys, tempfile, time
