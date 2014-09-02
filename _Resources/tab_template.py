@@ -15,7 +15,10 @@ from calibre.devices.usbms.driver import debug_print
 
 from calibre_plugins.ios_reader_apps.config import widget_path
 
-from PyQt4.Qt import QWidget
+try:
+    from PyQt5.Qt import QWidget
+except ImportError:
+    from PyQt4.Qt import QWidget
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:
