@@ -40,8 +40,12 @@ from calibre.ptempfile import PersistentTemporaryDirectory
 from calibre.utils.config import config_dir, JSONConfig
 from calibre.utils.zipfile import ZipFile
 
-from PyQt4.Qt import QDialog, QIcon, QObject, QPixmap, pyqtSignal
-from PyQt4.uic import compileUi
+try:
+    from PyQt5.Qt import QDialog, QIcon, QObject, QPixmap, pyqtSignal
+    from PyQt5.uic import compileUi
+except ImportError:
+    from PyQt4.Qt import QDialog, QIcon, QObject, QPixmap, pyqtSignal
+    from PyQt4.uic import compileUi
 
 # Import glue from plugin if between calibre versions with glue updates
 if False:
@@ -576,7 +580,7 @@ class iOSReaderApp(DriverBase, Logger):
     temp_dir = None
     verbose = None
     # #mark ~~~ plugin version, minimum calibre version ~~~
-    version = (1, 4, 2)
+    version = (1, 4, 3)
     minimum_calibre_version = (1, 37, 0)
 
     # #mark ~~~ USB fingerprints ~~~
@@ -929,7 +933,7 @@ class iOSReaderApp(DriverBase, Logger):
         '''
         ans = super(iOSReaderApp, self).is_usb_connected_windows(devices_on_system, debug, only_presence)
         usb_connected = ans[0]
-        self._log_location(ans)
+        #self._log_location(ans)
         if usb_connected:
             # If reader app specified, check for installation, reconfigure
             if self.ios_reader_app:

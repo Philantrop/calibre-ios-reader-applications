@@ -18,7 +18,12 @@ from calibre.library.custom_columns import CustomColumns
 
 from calibre_plugins.marvin_manager.book_status import dialog_resources_path
 
-from PyQt4.Qt import (Qt, QColor, QDialog, QDialogButtonBox, QIcon, QPalette, QPixmap,
+try:
+    from PyQt5.Qt import (Qt, QColor, QDialog, QDialogButtonBox, QIcon, QPalette, QPixmap,
+                      QSize, QSizePolicy, QTableWidgetItem,
+                      pyqtSignal)
+except ImportError:
+    from PyQt4.Qt import (Qt, QColor, QDialog, QDialogButtonBox, QIcon, QPalette, QPixmap,
                       QSize, QSizePolicy, QTableWidgetItem,
                       pyqtSignal)
 

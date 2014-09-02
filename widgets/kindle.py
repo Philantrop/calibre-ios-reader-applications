@@ -16,7 +16,27 @@ from calibre_plugins.ios_reader_apps.config import widget_path
 from calibre_plugins.ios_reader_apps import (
     KINDLE_ENABLED_FORMATS, KINDLE_SUPPORTED_FORMATS)
 
-from PyQt4.Qt import Qt, QListWidgetItem, QVariant, QWidget
+try:
+    from PyQt5.Qt import Qt, QListWidgetItem, QVariant, QWidget
+except ImportError:
+    from PyQt4.Qt import Qt, QListWidgetItem, QVariant, QWidget
+
+try:
+    from calibre.gui2 import QVariant
+    del QVariant
+except ImportError:
+    is_qt4 = False
+    convert_qvariant = lambda x: x
+else:
+    is_qt4 = True
+
+    def convert_qvariant(x):
+        vt = x.type()
+        if vt == x.String:
+            return unicode(x.toString())
+        if vt == x.List:
+            return [convert_qvariant(i) for i in x.toList()]
+        return x.toPyObject()
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:
@@ -53,7 +73,7 @@ class PluginWidget(QWidget, Ui_Form):
 
         for format in all_formats:
             item = QListWidgetItem(format, self.columns)
-            item.setData(Qt.UserRole, QVariant(format))
+            item.setData(Qt.UserRole, format)
             item.setFlags(Qt.ItemIsEnabled|Qt.ItemIsUserCheckable|Qt.ItemIsSelectable)
             item.setCheckState(Qt.Checked if format in enabled_formats else Qt.Unchecked)
 
@@ -71,9 +91,9 @@ class PluginWidget(QWidget, Ui_Form):
         Return a dict of current options
         '''
         opts = {}
-        all_formats = [unicode(self.columns.item(i).data(Qt.UserRole).toString())
+        all_formats = [unicode(convert_qvariant(self.columns.item(i).data(Qt.UserRole)))
             for i in range(self.columns.count())]
-        enabled_formats = [unicode(self.columns.item(i).data(Qt.UserRole).toString())
+        enabled_formats = [unicode(convert_qvariant(self.columns.item(i).data(Qt.UserRole)))
             for i in range(self.columns.count()) if self.columns.item(i).checkState()==Qt.Checked]
         opts['kindle_supported_formats'] = all_formats
         opts['kindle_enabled_formats'] = enabled_formats

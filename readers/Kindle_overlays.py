@@ -7,7 +7,7 @@ from __future__ import (unicode_literals, division, absolute_import,
 __license__ = 'GPL v3'
 __copyright__ = '2013, Gregory Riker'
 
-import base64, cStringIO, os, sqlite3, subprocess, time
+import base64, cStringIO, os, sqlite3, subprocess, time, re
 from datetime import datetime
 
 from calibre.constants import islinux, isosx, iswindows

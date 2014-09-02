@@ -60,7 +60,10 @@ if True:
         General initialization that would have occurred in __init__()
         '''
         from calibre.ptempfile import PersistentTemporaryDirectory
-        from PyQt4.QtCore import pyqtSignal
+        try:
+            from PyQt5.Qt import pyqtSignal
+        except ImportError:
+            from PyQt4.QtCore import pyqtSignal
 
         self._log_location(self.ios_reader_app)
 

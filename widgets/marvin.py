@@ -17,9 +17,14 @@ from calibre.devices.usbms.driver import debug_print
 from calibre_plugins.ios_reader_apps import get_cc_mapping, set_cc_mapping
 from calibre_plugins.ios_reader_apps.config import widget_path
 
-from PyQt4.Qt import (QAbstractItemView, QCheckBox, QIcon, QLineEdit,
+try:
+    from PyQt5.Qt import (QAbstractItemView, QCheckBox, QIcon, QLineEdit,
                       QListWidget, QListWidgetItem, QRadioButton,
-                      Qt, QUrl, QVariant, QWidget)
+                      Qt, QUrl, QWidget)
+except ImportError:
+    from PyQt4.Qt import (QAbstractItemView, QCheckBox, QIcon, QLineEdit,
+                      QListWidget, QListWidgetItem, QRadioButton,
+                      Qt, QUrl, QWidget)
 
 # Import Ui_Form from form generated dynamically during initialization
 if True:

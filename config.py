@@ -12,7 +12,10 @@ from calibre.gui2 import open_url, show_restart_warning
 from calibre.gui2.ui import get_gui, info_dialog
 from calibre.utils.config import config_dir
 
-from PyQt4.Qt import QFont, QIcon, QUrl, QWidget
+try:
+    from PyQt5.Qt import QFont, QIcon, QUrl, QWidget
+except ImportError:
+    from PyQt4.Qt import QFont, QIcon, QUrl, QWidget
 
 widget_path = os.path.join(config_dir, 'plugins',
                            'iOS_reader_applications_resources', 'widgets')
@@ -678,7 +681,10 @@ class ConfigWidget(QWidget, Ui_Dialog):
 # calibre-debug config.py 2> >(grep -v 'CoreAnimation\|CoreText\|modalSession' 1>&2)
 # Search 'iOS Reader Apps'
 if __name__ == '__main__':
-    from PyQt4.Qt import QApplication
+    try:
+        from PyQt5.Qt import QApplication
+    except ImportError:
+        from PyQt4.Qt import QApplication
     from calibre.gui2.preferences import test_widget
     app = QApplication([])
     test_widget('Advanced', 'Plugins')
