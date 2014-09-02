@@ -633,9 +633,9 @@ class ConfigWidget(QWidget, Ui_Dialog):
     def support_forum(self):
         '''
         Open iOSRA support thread at MobileRead
-        http://www.mobileread.com/forums/showthread.php?t=215624
+        http://www.mobileread.com/forums/showthread.php?t=241143
         '''
-        support_thread = "http://www.mobileread.com/forums/showthread.php?t=215624"
+        support_thread = "http://www.mobileread.com/forums/showthread.php?t=241143"
         open_url(QUrl(support_thread))
 
     def validate(self):
