@@ -226,7 +226,7 @@ if True:
 
             metrics = {'book_count': len(booklist),
                        'load_time': self.load_time}
-            self._log_metrics(metrics=metrics)
+            #self._log_metrics(metrics=metrics)
 
 
         return booklist

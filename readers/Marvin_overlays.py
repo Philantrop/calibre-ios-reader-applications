@@ -435,7 +435,7 @@ if True:
             self.load_time = time.time() - start_time
             metrics = {'book_count': len(booklist),
                        'load_time': self.load_time}
-            self._log_metrics(metrics=metrics)
+            #self._log_metrics(metrics=metrics)
 
             if self.prefs.get('development_mode', False):
                 self._log("cached %d books from Marvin:" % len(cached_books))

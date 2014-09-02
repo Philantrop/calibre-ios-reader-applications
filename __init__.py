@@ -1036,7 +1036,7 @@ class iOSReaderApp(DriverBase, Logger):
         # Special handling for iBooks, change class completely
         if self.ios_reader_app == 'iBooks':
             # Post logging message without book_count
-            self._log_metrics()
+            #self._log_metrics()
 
             from calibre.devices.apple.driver import ITUNES
             ITUNES.VENDOR_ID = self.VENDOR_ID
