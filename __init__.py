@@ -655,6 +655,9 @@ class iOSReaderApp(DriverBase, Logger):
         _BCD.add(0x601)             # iPhone 5S (AT&T)
         _BCD.add(0x602)             # iPhone 5S (Telstra)
 
+        _BCD.add(0x701)             # iPhone 6 Plus
+        _BCD.add(0x702)             # iPhone 6
+
     '''     iPod     '''
     if True:
         _PRODUCT_ID.add(0x1291)     # iPod Touch
