@@ -621,6 +621,7 @@ class iOSReaderApp(DriverBase, Logger):
         _BCD.add(0x401)             # iPad Air WiFi
         _BCD.add(0x402)             # iPad Air GSM
 
+        _BCD.add(0x503)             # iPad Air 2 WiFi
         _BCD.add(0x504)             # iPad Air 2 GSM
 
     '''     iPad  Mini     (_PRODUCT_ID 0x12ab shared with iPad)   '''
@@ -631,6 +632,7 @@ class iOSReaderApp(DriverBase, Logger):
 
         _BCD.add(0x404)             # iPad rMini WiFi
         _BCD.add(0x405)             # iPad rMini GSM (Verizon LTE)
+
 
     '''     iPhone     '''
     if True:
