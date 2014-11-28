@@ -633,6 +633,8 @@ class iOSReaderApp(DriverBase, Logger):
         _BCD.add(0x404)             # iPad rMini WiFi
         _BCD.add(0x405)             # iPad rMini GSM (Verizon LTE)
 
+        _BCD.add(0x407)             # iPad Mini 3 WiFi
+        _BCD.add(0x408)             # iPad Mini 3 GSM
 
     '''     iPhone     '''
     if True:
