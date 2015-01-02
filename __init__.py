@@ -795,7 +795,7 @@ class iOSReaderApp(DriverBase, Logger):
         self.prefs = plugin_prefs
         self.verbose = self.prefs.get('debug_plugin', False)
 
-        self._log_location("v%d.%d.%d" % self.version)
+        self._log_location("v%s" % '.'.join(map(str, self.version)))
 
         self.resources_path = os.path.join(config_dir, 'plugins', "%s_resources" % self.name.replace(' ', '_'))
 
@@ -1250,7 +1250,7 @@ class iOSReaderApp(DriverBase, Logger):
         Initialize the JSON store
         '''
         pref_map = {
-            'plugin_version': b"%d.%d.%d" % self.version,
+            'plugin_version': b"%s" % '.'.join(map(str, self.version)),
             'development_mode': False,
             #'additional_readers': os.sep.join(['path','to','your','reader_class.py'])
             }
@@ -1388,7 +1388,7 @@ class iOSReaderApp(DriverBase, Logger):
             try:
                 br.open(PluginMetricsLogger.URL)
                 args = {'plugin': self.gui_name,
-                        'version': "%d.%d.%d" % self.version}
+                        'version': "%s" % '.'.join(map(str, self.version))}
                 post = PluginMetricsLogger(**args)
                 post.req.add_header('DEVICE_OS', self.device_profile['ProductVersion'])
                 post.req.add_header("DEVICE_MODEL", self.device_profile['ProductType'])
