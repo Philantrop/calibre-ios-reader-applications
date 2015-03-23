@@ -580,7 +580,7 @@ class iOSReaderApp(DriverBase, Logger):
     temp_dir = None
     verbose = None
     # #mark ~~~ plugin version, minimum calibre version ~~~
-    version = (1, 4, 4)
+    version = (1, 4, 6)
     minimum_calibre_version = (1, 37, 0)
 
     # #mark ~~~ USB fingerprints ~~~
@@ -621,6 +621,7 @@ class iOSReaderApp(DriverBase, Logger):
         _BCD.add(0x401)             # iPad Air WiFi
         _BCD.add(0x402)             # iPad Air GSM
 
+        _BCD.add(0x503)             # iPad Air 2 WiFi
         _BCD.add(0x504)             # iPad Air 2 GSM
 
     '''     iPad  Mini     (_PRODUCT_ID 0x12ab shared with iPad)   '''
@@ -631,6 +632,9 @@ class iOSReaderApp(DriverBase, Logger):
 
         _BCD.add(0x404)             # iPad rMini WiFi
         _BCD.add(0x405)             # iPad rMini GSM (Verizon LTE)
+
+        _BCD.add(0x407)             # iPad Mini 3 WiFi
+        _BCD.add(0x408)             # iPad Mini 3 GSM
 
     '''     iPhone     '''
     if True:
@@ -791,7 +795,7 @@ class iOSReaderApp(DriverBase, Logger):
         self.prefs = plugin_prefs
         self.verbose = self.prefs.get('debug_plugin', False)
 
-        self._log_location("v%d.%d.%d" % self.version)
+        self._log_location("v%s" % '.'.join(map(str, self.version)))
 
         self.resources_path = os.path.join(config_dir, 'plugins', "%s_resources" % self.name.replace(' ', '_'))
 
@@ -1246,7 +1250,7 @@ class iOSReaderApp(DriverBase, Logger):
         Initialize the JSON store
         '''
         pref_map = {
-            'plugin_version': b"%d.%d.%d" % self.version,
+            'plugin_version': b"%s" % '.'.join(map(str, self.version)),
             'development_mode': False,
             #'additional_readers': os.sep.join(['path','to','your','reader_class.py'])
             }
@@ -1384,7 +1388,7 @@ class iOSReaderApp(DriverBase, Logger):
             try:
                 br.open(PluginMetricsLogger.URL)
                 args = {'plugin': self.gui_name,
-                        'version': "%d.%d.%d" % self.version}
+                        'version': "%s" % '.'.join(map(str, self.version))}
                 post = PluginMetricsLogger(**args)
                 post.req.add_header('DEVICE_OS', self.device_profile['ProductVersion'])
                 post.req.add_header("DEVICE_MODEL", self.device_profile['ProductType'])
