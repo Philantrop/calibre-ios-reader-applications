@@ -5,6 +5,8 @@
     http://tmpvar.com/markdown.html
 -->
 
+##This plugin is NOT compatible with iOS >= 8.3. Nothing can be done about it till Marvin itself is adapted to the changes by Apple.##
+
 ##Communication protocol for calibre and iOS reader applications##
 This document provides details of the communication protocol for the _iOS reader applications_ device driver plugin for [calibre](https://github.com/kovidgoyal/calibre). The protocol was developed by Greg Riker and Kristian Guillaumier.
 
